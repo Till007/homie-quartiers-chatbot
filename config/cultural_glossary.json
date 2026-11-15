@@ -1,0 +1,27 @@
+{
+  "Kurzzeitpflege": {
+    "explanation_simple": "Vorübergehende Betreuung und Pflege in einer Einrichtung für einige Wochen, wenn pflegende Angehörige krank sind oder Urlaub brauchen.",
+    "do_not_confuse_with": "Dauerhaftes Pflegeheim (Stationäre Langzeitpflege)",
+    "multilingual_keywords": ["short-term care", "geçici bakım", "رعاية قصيرة الأمد", "короткостроковий догляд", "краткосрочный уход"]
+  },
+  "Tagespflege": {
+    "explanation_simple": "Tagsüber Betreuung und gemeinsames Essen in einer Einrichtung. Abends und nachts schlafen die pflegebedürftigen Menschen wieder zu Hause.",
+    "do_not_confuse_with": "Altenheim oder dauerhafter Umzug ins Heim",
+    "multilingual_keywords": ["day care for seniors", "gündüz bakımı", "الرعاية النهارية", "денний догляд", "дневной уход"]
+  },
+  "Verhinderungspflege": {
+    "explanation_simple": "Geld von der Pflegekasse für eine Ersatz-Pflegekraft zu Hause, wenn die eigentliche Pflegeperson zeitweise verhindert ist.",
+    "do_not_confuse_with": "Verhinderung von Pflege",
+    "multilingual_keywords": ["respite care", "vekaleten bakım", "رعاية بديلة مؤقتة", "замісний догляд", "замещающий уход"]
+  },
+  "Pflegegrad": {
+    "explanation_simple": "Stufe von 1 bis 5, die zeigt, wie viel Unterstützung ein Mensch im Alltag benötigt, um Geld und Hilfe von der Pflegekasse zu erhalten.",
+    "do_not_confuse_with": "Behinderungsgrad (GdB)",
+    "multilingual_keywords": ["care level", "bakım derecesi", "درجة الرعاية", "ступінь догляду", "степень ухода"]
+  },
+  "Nachbarschaftshilfe": {
+    "explanation_simple": "Ehrenamtliche Hilfe im Alltag durch Menschen aus dem Wohnquartier, zum Beispiel beim Einkaufen, Spazierengehen oder Vorlesen.",
+    "do_not_confuse_with": "Medizinischer Pflegedienst",
+    "multilingual_keywords": ["neighborhood help", "komşuluk yardımı", "مساعدة الجيران", "сусідська допомога", "соседская помощь"]
+  }
+}

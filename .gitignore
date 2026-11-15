@@ -1,0 +1,38 @@
+# Python & Virtuelle Umgebung
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Lokale Umgebungsvariablen & IDE
+.env
+.vscode/
+.idea/
+
+# Große KI-Modelle & Caches (NIEMALS in Git einchecken -> >100MB Limit!)
+data/models_cache/
+*.onnx
+*.onnx.json
+*.bin
+*.pt
+*.safetensors
+
+# Laufzeit-Daten, Quarantäne, Audio-Temp & Logs
+data/raw_inbox/*
+!data/raw_inbox/.gitkeep
+data/quarantine/*
+!data/quarantine/.gitkeep
+data/processed_chunks/*
+!data/processed_chunks/.gitkeep
+data/audit_logs/*
+!data/audit_logs/.gitkeep
+data/audio_temp/*
+!data/audio_temp/.gitkeep
+data/production_bundle/*
+!data/production_bundle/.gitkeep
+
+# Betriebssystem-Dateien
+Thumbs.db
+.DS_Store

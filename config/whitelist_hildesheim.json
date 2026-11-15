@@ -1,0 +1,26 @@
+{
+  "allowed_domains": [
+    "hildesheim.de",
+    "landkreishildesheim.de",
+    "awo-hildesheim.de",
+    "awo-bs.de",
+    "caritas-hildesheim.de",
+    "diakonie-hildesheim.de",
+    "senioren-hildesheim.de",
+    "www.awo-hi.de",
+    "www.amazon.de",
+    "https://www.seniorenberatung-hannover.de/"
+  ],
+  "blocked_url_patterns": [
+    "/karriere",
+    "/jobs",
+    "/stellenangebote",
+    "/impressum",
+    "/datenschutz",
+    "/b2b",
+    "/presse",
+    "/login",
+    "/warenkorb"
+  ],
+  "max_crawl_depth": 1
+}
