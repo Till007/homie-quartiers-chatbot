@@ -1,6 +1,8 @@
 """
 services/orchestrator_service/strategies/pure_rag.py
 Paradigma 1 (TA-04): Pure RAG (Single-Step Hybrid-Retrieval mit Quellen-Guard).
+Unterstützt automatische Fremdsprachen-Erkennung (z. B. Arabisch, Türkisch, Ukrainisch)
+und die Cross-Lingual Query-Brücke für hohe Trefferquote auf deutschen Quellen.
 """
 
 import time
@@ -29,14 +31,21 @@ class PureRAGStrategy(BaseInferenceStrategy):
     async def execute(self, req: ChatRequest, history: List[ChatMessage]) -> ChatResponse:
         t_start = time.perf_counter()
         trace: List[AgentTraceStep] = []
-        is_sensitive = detect_sensitive_topic(req.user_message)
 
-        # 1. Optionaler Query-Rewriter bei Folgefragen (UML-Sequenzdiagramm)
-        search_query, rewrite_step = await self.rewrite_query_if_needed(req.user_message, history)
+        # 0. Automatische Schrift- und Spracherkennung (z. B. Arabisch / Kyrillisch / Türkisch)
+        effective_lang = self.detect_effective_language(req.user_message, req.user_language)
+        req.user_language = effective_lang
+
+        # 1. Query-Rewriter bzw. Cross-Lingual Übersetzung der Suchanfrage ins Deutsche
+        search_query, rewrite_step = await self.rewrite_query_if_needed(
+            req.user_message, history, effective_lang=effective_lang
+        )
         if rewrite_step:
             trace.append(rewrite_step)
 
-        # 2. Hybrid-Retrieval & Quellen-Guard aufrufen
+        is_sensitive = detect_sensitive_topic(search_query)
+
+        # 2. Hybrid-Retrieval & Quellen-Guard aufrufen (auf der deutschen Suchfrage)
         ret_resp, ret_step = await self.query_retrieval_service(
             search_query=search_query,
             score_threshold=req.score_threshold,
@@ -63,7 +72,10 @@ class PureRAGStrategy(BaseInferenceStrategy):
 
         # 4. Prompt-Builder & LLM-Generierung (inkl. V2a / V2b Unterstützung)
         context_block = format_chunks_for_prompt(ret_resp.results)
-        user_prompt = f"GEFUNDENE QUELLEN AUS DER QUARTIERSDATENBANK:\n{context_block}\n\nFRAGE DER BEWOHNERIN / DES BEWOHNERS:\n{req.user_message}"
+        user_prompt = (
+            f"GEFUNDENE QUELLEN AUS DER QUARTIERSDATENBANK:\n{context_block}\n\n"
+            f"FRAGE DER BEWOHNERIN / DES BEWOHNERS:\n{req.user_message}"
+        )
 
         sys_de = build_system_prompt(req.language_level, "de", is_sensitive)
         sys_target = build_system_prompt(req.language_level, req.user_language, is_sensitive)
@@ -73,6 +85,7 @@ class PureRAGStrategy(BaseInferenceStrategy):
             system_prompt_de=sys_de,
             system_prompt_target=sys_target,
             user_prompt_with_context=user_prompt,
+            german_question=search_query,
         )
         trace.extend(gen_steps)
 

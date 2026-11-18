@@ -2,12 +2,9 @@
 services/orchestrator_service/main.py
 FastAPI-Microservice für den Dialog-Controller / Orchestrator auf Port 8004.
 Beinhaltet:
+- Deterministischen Safety- & Krisen-Interceptor (Suizid, Gewalt, Sucht, NSFW) gemäß FA-06 & SA-06
 - Strategy-Pattern Umschaltung zwischen Pure RAG, Fine-Tuned LLM und Agentic AI (TA-04)
 - Flüchtiges RAM-Sitzungsgedächtnis mit 60s Auto-Reset (TA-06)
-- REST-Endpunkt (/api/v1/chat/query) & WebSocket-Endpunkt (/ws/robot) mit Satz-Streaming & RobotState (TA-05)
-
-Startbefehl:
-    uvicorn services.orchestrator_service.main:app --host 127.0.0.1 --port 8004 --reload
 """
 
 import re
@@ -16,6 +13,7 @@ from typing import Dict
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 from services.orchestrator_service.memory import EphemeralSessionMemory
+from services.orchestrator_service.safety_guard import evaluate_safety_and_crisis
 from services.orchestrator_service.strategies.agentic_ai import AgenticAIStrategy
 from services.orchestrator_service.strategies.base import BaseInferenceStrategy
 from services.orchestrator_service.strategies.fine_tuned import FineTunedStrategy
@@ -27,14 +25,12 @@ logger = get_service_logger("orchestrator-api")
 
 app = FastAPI(
     title="HOMIE Orchestrator & Dialog-Controller Microservice",
-    description="Steuert Dialoggedächtnis (60s RAM), Query-Rewriting und schaltet zwischen Pure RAG, Fine-Tuned und Agentic AI um.",
-    version="1.0.0",
+    description="Steuert Safety-Guardrails, Dialoggedächtnis (60s RAM) und schaltet zwischen Pure RAG, Fine-Tuned und Agentic AI um.",
+    version="1.3.0",
 )
 
-# 1. DSGVO-konformes Sitzungsgedächtnis (60 Sekunden Inaktivitäts-Timeout nach TA-06)
 session_memory = EphemeralSessionMemory(ttl_seconds=60)
 
-# 2. Austauschbare Architekturvarianten (Strategy Pattern nach TA-04)
 STRATEGIES: Dict[ParadigmMode, BaseInferenceStrategy] = {
     ParadigmMode.PURE_RAG: PureRAGStrategy(),
     ParadigmMode.FINE_TUNED: FineTunedStrategy(),
@@ -55,18 +51,34 @@ async def health_check():
 @app.post("/api/v1/chat/query", response_model=ChatResponse)
 async def chat_query_endpoint(req: ChatRequest) -> ChatResponse:
     """
-    Haupt-Endpunkt für Text- und transkribierte Sprachanfragen.
-    Lädt den Sitzungsverlauf aus dem RAM, führt die gewählte Strategie (Pure RAG, Fine-Tuned, Agentic AI)
-    aus und speichert die Runde im flüchtigen RAM-Gedächtnis.
+    1. Prüft über den Safety-Interceptor auf akute Krisen (Suizid, Gewalt, Sucht) oder Missbrauch (FA-06 / SA-06).
+    2. Führt andernfalls die gewählte Strategie (Pure RAG, Fine-Tuned, Agentic AI) aus.
     """
     try:
+        # 1. Deterministischer Safety- & Krisen-Check VOR dem LLM/RAG-Aufruf
+        crisis_response, safety_net_appendix, safety_step = evaluate_safety_and_crisis(
+            req, req.user_message
+        )
+        if crisis_response is not None:
+            # Bei akuter Krise oder Missbrauch: Session-Kontext aus Datenschutz-/Sicherheitsgründen zurücksetzen
+            session_memory.reset_session(req.session_id)
+            return crisis_response
+
+        # 2. Reguläre Ausführung über das gewählte Paradigma
         history = session_memory.get_history(req.session_id)
         strategy = STRATEGIES.get(req.paradigm, STRATEGIES[ParadigmMode.AGENTIC_AI])
-
         response = await strategy.execute(req, history)
 
-        # Speichere Runde im RAM-Gedächtnis (wird nach 60s Inaktivität automatisch gelöscht)
-        session_memory.append_turn(req.session_id, req.user_message, response.answer_text)
+        # Falls Stufe 2 (z. B. Sucht/Drogen) aktiv war: Verifiziertes Sicherheitsnetz anhängen & Diskretion erzwingen
+        if safety_net_appendix:
+            response.answer_text = f"{response.answer_text}{safety_net_appendix}"
+            response.is_sensitive_topic = True
+            if safety_step:
+                response.agent_trace.insert(0, safety_step)
+
+        if response.passed_source_guard and not response.answer_text.startswith("⚠️"):
+            session_memory.append_turn(req.session_id, req.user_message, response.answer_text)
+
         return response
 
     except Exception as e:
@@ -76,7 +88,6 @@ async def chat_query_endpoint(req: ChatRequest) -> ChatResponse:
 
 @app.post("/api/v1/session/reset")
 async def reset_session_endpoint(session_id: str = "default-kiosk-session"):
-    """TA-06: Sofortiges Löschen des Gesprächsverlaufs aus dem RAM (z. B. bei Nutzerwechsel am Terminal)."""
     deleted = session_memory.reset_session(session_id)
     return {
         "success": True,
@@ -88,27 +99,32 @@ async def reset_session_endpoint(session_id: str = "default-kiosk-session"):
 
 @app.websocket("/ws/robot")
 async def robot_websocket_endpoint(websocket: WebSocket):
-    """
-    TA-05 & UML-Sequenzdiagramm:
-    WebSocket-Schnittstelle für den Navel-Roboter / Kiosk-Terminal.
-    Sendet Zustandssignale ('listening', 'thinking', 'speaking', 'idle') für Roboter-LEDs/Gestik
-    und streamt die Antwort satzweise für minimale TTS-Latenz (TA-03).
-    """
     await websocket.accept()
     try:
         while True:
             raw_data = await websocket.receive_json()
             req = ChatRequest.model_validate(raw_data)
 
-            # Signalisiere dem Roboter: "Ich denke nach" (für LED-/Blick-Steuerung nach TA-05)
             await websocket.send_json({"event": "state_change", "robot_state": RobotState.THINKING.value})
 
-            history = session_memory.get_history(req.session_id)
-            strategy = STRATEGIES.get(req.paradigm, STRATEGIES[ParadigmMode.AGENTIC_AI])
-            response = await strategy.execute(req, history)
-            session_memory.append_turn(req.session_id, req.user_message, response.answer_text)
+            crisis_response, safety_net_appendix, safety_step = evaluate_safety_and_crisis(
+                req, req.user_message
+            )
+            if crisis_response is not None:
+                session_memory.reset_session(req.session_id)
+                response = crisis_response
+            else:
+                history = session_memory.get_history(req.session_id)
+                strategy = STRATEGIES.get(req.paradigm, STRATEGIES[ParadigmMode.AGENTIC_AI])
+                response = await strategy.execute(req, history)
+                if safety_net_appendix:
+                    response.answer_text = f"{response.answer_text}{safety_net_appendix}"
+                    response.is_sensitive_topic = True
+                    if safety_step:
+                        response.agent_trace.insert(0, safety_step)
+                if response.passed_source_guard and not response.answer_text.startswith("⚠️"):
+                    session_memory.append_turn(req.session_id, req.user_message, response.answer_text)
 
-            # Signalisiere dem Roboter: "Ich spreche" und streame Satz für Satz (UML loop [pro fertigem Satz])
             await websocket.send_json({"event": "state_change", "robot_state": RobotState.SPEAKING.value})
             sentences = [
                 s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", response.answer_text) if s.strip()
@@ -123,7 +139,6 @@ async def robot_websocket_endpoint(websocket: WebSocket):
                     }
                 )
 
-            # Sende vollständiges Metadaten-Paket (Quellen, QR-Code, Agent-Trace) und gehe auf 'idle'
             response.robot_state = RobotState.IDLE
             await websocket.send_json(
                 {"event": "complete", "payload": response.model_dump(mode="json")}

@@ -2,12 +2,13 @@
 services/orchestrator_service/strategies/agentic_ai.py
 Paradigma 3 (TA-04): Agentic AI (Multi-Agenten-Workflow mit Slot-Filling, Tool-Filterung,
 Öffnungszeiten-Werkzeug und Verifier-Guardrail gemäß FA-02, FA-03 und SA-04).
+Unterstützt mehrsprachige Eingaben (de, ar, tr, uk, ru, en) inkl. mehrsprachiger Slot-Filling-Rückfragen.
 """
 
 import re
 import time
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from services.orchestrator_service.prompts import (
     build_qr_code_payload,
@@ -36,7 +37,8 @@ logger = get_service_logger("strategy-agentic")
 class AgenticAIStrategy(BaseInferenceStrategy):
     """
     Mehrstufiges Agentensystem:
-    1. Slot-Filling-Agent (FA-02): Prüft auf vage Anfragen und stellt Rückfragen.
+    0. Cross-Lingual Query-Brücke: Erkennt Fremdsprachen (z. B. Arabisch) und übersetzt die Arbeitsfrage ins Deutsche.
+    1. Slot-Filling-Agent (FA-02): Prüft auf vage Anfragen und stellt Rückfragen in der Nutzersprache.
     2. Tool- & Filter-Agent (FA-03): Extrahiert Metadaten-Filter (Sprache, Frauen-Schutzraum, Barrierefreiheit, Stadtteil) & Zeitkontext.
     3. Retrieval-Agent mit Auto-Relaxation: Sucht in ChromaDB/BM25 und lockert bei 0 Treffern zu enge Ortsfilter.
     4. Verifier-/Guardrail-Agent (SA-04): Überprüft Telefonnummern und Fakten vor der Ausgabe gegen die Quell-Chunks.
@@ -46,19 +48,32 @@ class AgenticAIStrategy(BaseInferenceStrategy):
         self.hildesheim_districts = [
             "Stadtmitte", "Nordstadt", "Oststadt", "Weststadt", "Südstadt",
             "Marienburger Höhe", "Galgenberg", "Drispenstedt", "Himmelsthür",
-            "Ochtersum", "Moritzberg", "Bavenstedt", "Itzum", "Sorsum"
+            "Ochtersum", "Moritzberg", "Bavenstedt", "Itzum", "Sorsum", "Uppen"
         ]
 
     async def execute(self, req: ChatRequest, history: List[ChatMessage]) -> ChatResponse:
         t_start = time.perf_counter()
         trace: List[AgentTraceStep] = []
-        is_sensitive = detect_sensitive_topic(req.user_message)
+
+        # -----------------------------------------------------------------
+        # SCHRITT 0: Automatische Spracherkennung & Cross-Lingual Query-Brücke
+        # -----------------------------------------------------------------
+        effective_lang = self.detect_effective_language(req.user_message, req.user_language)
+        req.user_language = effective_lang
+
+        search_query, rewrite_step = await self.rewrite_query_if_needed(
+            req.user_message, history, effective_lang=effective_lang
+        )
+        if rewrite_step:
+            trace.append(rewrite_step)
+
+        is_sensitive = detect_sensitive_topic(search_query)
 
         # -----------------------------------------------------------------
         # AGENT 1: Router & Slot-Filling-Check bei vagen Anliegen (FA-02)
         # -----------------------------------------------------------------
         is_vague, clarification_msg, slot_step = self._check_slot_filling_needed(
-            req.user_message, history, req.language_level, req.user_language
+            search_query, history, req.language_level, req.user_language
         )
         trace.append(slot_step)
 
@@ -69,7 +84,8 @@ class AgenticAIStrategy(BaseInferenceStrategy):
                 paradigm_used=ParadigmMode.AGENTIC_AI,
                 translation_variant_used=req.translation_variant,
                 answer_text=clarification_msg,
-                rewritten_query=req.user_message,
+                german_intermediate_text=clarification_msg if req.user_language == "de" else None,
+                rewritten_query=search_query,
                 passed_source_guard=True,
                 is_clarification_question=True,
                 is_sensitive_topic=is_sensitive,
@@ -80,12 +96,8 @@ class AgenticAIStrategy(BaseInferenceStrategy):
             )
 
         # -----------------------------------------------------------------
-        # AGENT 2: Query-Rewriter & Dynamische Tool-/Filter-Extraktion (FA-03)
+        # AGENT 2: Dynamische Tool-/Filter-Extraktion (FA-03)
         # -----------------------------------------------------------------
-        search_query, rewrite_step = await self.rewrite_query_if_needed(req.user_message, history)
-        if rewrite_step:
-            trace.append(rewrite_step)
-
         auto_filter, time_context_note, tool_step = self._extract_agentic_tools_and_filters(
             search_query, req.manual_filters
         )
@@ -156,6 +168,7 @@ class AgenticAIStrategy(BaseInferenceStrategy):
             system_prompt_de=sys_de,
             system_prompt_target=sys_target,
             user_prompt_with_context=user_prompt,
+            german_question=search_query,
         )
         trace.extend(gen_steps)
 
@@ -190,29 +203,29 @@ class AgenticAIStrategy(BaseInferenceStrategy):
 
     def _check_slot_filling_needed(
         self,
-        user_msg: str,
+        german_search_query: str,
         history: List[ChatMessage],
         lang_level: LanguageLevel,
         user_lang: str,
     ) -> Tuple[bool, Optional[str], AgentTraceStep]:
         """
         FA-02 Bedarfsorientierte Dialogführung (Slot-Filling):
-        Prüft, ob eine Erst-Anfrage zu vage ist (z.B. 'Hallo, ich brauche Hilfe' oder 'Was gibt es hier?'),
-        und stellt gezielte Rückfragen, um den Bedarf einzugrenzen.
+        Prüft auf der (ggf. ins Deutsche übersetzten) Anfrage, ob das Anliegen zu vage ist,
+        und gibt die passende Rückfrage direkt in der Sprache der Nutzer:innen (de, ar, tr, uk, ru, en) aus.
         """
         t0 = time.perf_counter()
-        words = re.findall(r"\b\w+\b", user_msg.lower())
+        words = re.findall(r"\b\w+\b", german_search_query.lower())
 
         domain_keywords = [
             "pflege", "beratung", "essen", "mittagstisch", "arzt", "bus", "bahn", "rollstuhl",
             "demenz", "frauen", "kinder", "familie", "senioren", "türkisch", "arabisch",
             "russisch", "ukrainisch", "antrag", "geld", "wohngeld", "treff", "sport",
             "kurzzeitpflege", "tagespflege", "verhinderungspflege", "nachbarschaftshilfe",
-            "oma", "opa", "papierkram", "hilfe für", "öffnungszeiten", "adresse", "telefon"
+            "oma", "opa", "papierkram", "hilfe für", "öffnungszeiten", "adresse", "telefon",
+            "pflegegrad", "krankenhaus", "mobilität", "freizeit", "quartier", "älter"
         ]
-        has_specific_topic = any(kw in user_msg.lower() for kw in domain_keywords)
+        has_specific_topic = any(kw in german_search_query.lower() for kw in domain_keywords)
 
-        # Wenn bereits Gesprächsverlauf existiert oder ein konkretes Thema genannt wurde -> Kein Slot-Filling nötig
         if history or has_specific_topic or len(words) >= 6:
             ms = round((time.perf_counter() - t0) * 1000, 1)
             return (
@@ -225,8 +238,33 @@ class AgenticAIStrategy(BaseInferenceStrategy):
                 ),
             )
 
-        # Vage Anfrage erkannt -> Gezielte, barrierefreie Rückfrage formulieren
-        if lang_level == LanguageLevel.EASY:
+        # Mehrsprachige Slot-Filling-Rückfragen für vage Erstanfragen
+        clarifications_by_lang: Dict[str, str] = {
+            "ar": (
+                "أهلاً بك! يسعدني مساعدتك في العثور على الخدمة المناسبة في هيلدسهايم. "
+                "هل تبحث عن استشارات الرعاية والتمريض، أو المساعدة لكبار السن، أو أنشطة أوقات الفراغ؟"
+            ),
+            "tr": (
+                "Merhaba! Hildesheim'da size uygun hizmeti bulmanıza memnuniyetle yardımcı olurum. "
+                "Bakım danışmanlığı, yaşlılar için günlük yardım veya boş zaman etkinlikleri mi arıyorsunuz?"
+            ),
+            "uk": (
+                "Вітаю! Я радо допоможу вам знайти потрібну послугу в Гільдесгаймі. "
+                "Ви шукаєте консультацію з догляду, допомогу для літніх людей чи дозвілля?"
+            ),
+            "ru": (
+                "Здравствуйте! Я с радостью помогу вам найти подходящее предложение в Хильдесхайме. "
+                "Вы ищете консультацию по уходу, помощь пожилым людям или мероприятия для досуга?"
+            ),
+            "en": (
+                "Hello! I would be happy to help you find the right service in Hildesheim. "
+                "Are you looking for care counseling, everyday support for seniors, or community activities?"
+            ),
+        }
+
+        if user_lang in clarifications_by_lang:
+            clarification = clarifications_by_lang[user_lang]
+        elif lang_level == LanguageLevel.EASY:
             clarification = (
                 "Hallo! Ich helfe Ihnen gerne weiter.\n"
                 "Wonach suchen Sie genau?\n"
@@ -248,7 +286,7 @@ class AgenticAIStrategy(BaseInferenceStrategy):
             clarification,
             AgentTraceStep(
                 step_name="Slot-Filling-Agent (FA-02)",
-                details=f"Vages Anliegen erkannt ('{user_msg}'). Stelle gezielte Rückfrage zur Bedarfseingrenzung.",
+                details=f"Vages Anliegen erkannt ('{german_search_query}'). Stelle gezielte Rückfrage ({user_lang}).",
                 duration_ms=ms,
             ),
         )
@@ -258,8 +296,7 @@ class AgenticAIStrategy(BaseInferenceStrategy):
     ) -> Tuple[Optional[RetrievalFilter], str, AgentTraceStep]:
         """
         FA-03 Kontextsensitive Filterung & § 12 C c Kulturspezifische Detailfragen:
-        Extrahiert strukturierte Filter (Frauen-Schutzraum, Vor-Ort-Sprache, Barrierefreiheit, Stadtteil)
-        und stellt das aktuelle Uhrzeit-/Wochentags-Tool bereit.
+        Extrahiert strukturierte Filter mit exakten Wortgrenzen (\b).
         """
         t0 = time.perf_counter()
         q_lower = query.lower()
@@ -271,12 +308,12 @@ class AgenticAIStrategy(BaseInferenceStrategy):
             f.target_group = TargetGroupTag.WOMEN_ONLY
             triggered_tools.append("target_group=women_only")
 
-        # 2. Vor-Ort-Sprachkompetenz (§ 2 I / § 12 C c: "Spricht dort jemand Türkisch?")
+        # 2. Vor-Ort-Sprachkompetenz (§ 2 I / § 12 C c: "Spricht dort jemand Türkisch/Arabisch?")
         lang_triggers = {
             "tr": ["türkisch", "türkce", "türkçe"],
-            "ar": ["arabisch", "عربي"],
-            "ru": ["russisch", "русский"],
-            "uk": ["ukrainisch", "українська"],
+            "ar": ["arabisch", "auf arabisch"],
+            "ru": ["russisch", "auf russisch"],
+            "uk": ["ukrainisch", "auf ukrainisch"],
             "en": ["englisch", "english"],
         }
         for iso_code, kw_list in lang_triggers.items():
@@ -290,9 +327,9 @@ class AgenticAIStrategy(BaseInferenceStrategy):
             f.require_barrier_free = True
             triggered_tools.append("require_barrier_free=True")
 
-        # 4. Stadtteil-Erkennung in Hildesheim (FA-03)
+        # 4. Stadtteil-Erkennung in Hildesheim mit Wortgrenzen (\b)
         for dist in self.hildesheim_districts:
-            if dist.lower() in q_lower:
+            if re.search(rf"\b{re.escape(dist)}\b", query, re.IGNORECASE):
                 f.district = dist
                 triggered_tools.append(f"district={dist}")
                 break
@@ -329,19 +366,16 @@ class AgenticAIStrategy(BaseInferenceStrategy):
     ) -> Tuple[str, AgentTraceStep]:
         """
         SA-04 Verifier-/Guardrail-Schritt:
-        Prüft deterministisch, ob alle mehrstelligen Ziffernfolgen (Telefonnummern, Postleitzahlen)
-        in der generierten Antwort auch tatsächlich im Quelltext vorkommen.
-        Verhindert erfundene Telefonnummern zu 100 %!
+        Prüft deterministisch, ob alle mehrstelligen Telefonnummern in der generierten Antwort
+        auch tatsächlich im Quelltext vorkommen.
         """
         t0 = time.perf_counter()
         combined_source_text = " ".join(
             f"{s.chunk.text_for_indexing} {s.chunk.metadata.phone or ''} {s.chunk.metadata.address or ''}"
             for s in sources
         )
-        # Normalisiere alle Ziffernblöcke >= 4 Ziffern (z.B. Telefonnummern, PLZ) aus den Quellen
         source_digits = re.sub(r"\D", "", combined_source_text)
 
-        # Suche nach Telefonnummern-Mustern im Antwortentwurf
         phone_candidates = re.findall(r"\b0\d{3,4}[\s/\-]?\d{3,8}\b", draft_answer)
         hallucinated_numbers: List[str] = []
 
@@ -361,7 +395,7 @@ class AgenticAIStrategy(BaseInferenceStrategy):
                 verified_text,
                 AgentTraceStep(
                     step_name="Verifier-Guardrail (SA-04 Halluzinationsschutz)",
-                    details=f"WARNUNG: Nicht belegte Nummer(n) {hallucinated_numbers} erkannt und aus Sicherheitsgründen entfernt!",
+                    details=f"WARNUNG: Nicht belegte Nummer(n) {hallucinated_numbers} erkannt und entfernt!",
                     duration_ms=ms,
                 ),
             )

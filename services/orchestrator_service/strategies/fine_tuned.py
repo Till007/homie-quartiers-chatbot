@@ -1,7 +1,8 @@
 """
 services/orchestrator_service/strategies/fine_tuned.py
 Paradigma 2 (TA-04): Fine-Tuned LLM (QLoRA-Adapter für Quartiers-Tonalität & Leichte Sprache).
-Verwendet einen schlanken System-Prompt, da Stil & Formatierung im Modell feinjustiert sind.
+Verwendet einen schlanken System-Prompt, da Stil & Formatierung im Modell feinjustiert sind,
+und nutzt die Cross-Lingual Query-Brücke für mehrsprachige Anfragen.
 """
 
 import time
@@ -37,17 +38,26 @@ class FineTunedStrategy(BaseInferenceStrategy):
     async def execute(self, req: ChatRequest, history: List[ChatMessage]) -> ChatResponse:
         t_start = time.perf_counter()
         trace: List[AgentTraceStep] = []
-        is_sensitive = detect_sensitive_topic(req.user_message)
 
-        search_query, rewrite_step = await self.rewrite_query_if_needed(req.user_message, history)
+        # 0. Automatische Schrift- und Spracherkennung (z. B. Arabisch / Kyrillisch / Türkisch)
+        effective_lang = self.detect_effective_language(req.user_message, req.user_language)
+        req.user_language = effective_lang
+
+        # 1. Query-Rewriter bzw. Cross-Lingual Übersetzung ins Deutsche
+        search_query, rewrite_step = await self.rewrite_query_if_needed(
+            req.user_message, history, effective_lang=effective_lang
+        )
         if rewrite_step:
             trace.append(rewrite_step)
 
+        is_sensitive = detect_sensitive_topic(search_query)
+
+        # 2. Hybrid-Retrieval mit kompaktem Top-3-Kontext
         ret_resp, ret_step = await self.query_retrieval_service(
             search_query=search_query,
             score_threshold=req.score_threshold,
             filters=req.manual_filters,
-            top_k_final=3,  # Kompakterer Kontext für Fine-Tuned-Variante
+            top_k_final=3,
         )
         trace.append(ret_step)
 
@@ -67,7 +77,7 @@ class FineTunedStrategy(BaseInferenceStrategy):
                 total_latency_ms=total_ms,
             )
 
-        # Kompakter System-Prompt für das Fine-Tuned Modell (Stil liegt im QLoRA-Adapter)
+        # 3. Kompakter System-Prompt für das Fine-Tuned Modell (Stil liegt im QLoRA-Adapter)
         lang_name = LANGUAGE_NAMES.get(req.user_language, "Deutsch")
         compact_sys_de = (
             f"[HOMIE-QLoRA | Modus: {req.language_level.value} | Stand: {KNOWLEDGE_CUTOFF}] "
@@ -79,7 +89,10 @@ class FineTunedStrategy(BaseInferenceStrategy):
         )
 
         context_block = format_chunks_for_prompt(ret_resp.results)
-        user_prompt = f"FAKTEN:\n{context_block}\n\nFRAGE: {req.user_message}"
+        user_prompt = (
+            f"GEFUNDENE QUELLEN AUS DER QUARTIERSDATENBANK:\n{context_block}\n\n"
+            f"FRAGE DER BEWOHNERIN / DES BEWOHNERS:\n{req.user_message}"
+        )
 
         final_answer, german_inter, gen_steps = await self.handle_translation_variant(
             req=req,
@@ -87,6 +100,7 @@ class FineTunedStrategy(BaseInferenceStrategy):
             system_prompt_target=compact_sys_target,
             user_prompt_with_context=user_prompt,
             model_name=OLLAMA_FINETUNED_MODEL,
+            german_question=search_query,
         )
         trace.extend(gen_steps)
 

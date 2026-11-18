@@ -1,9 +1,8 @@
 """
 services/etl_ingest_service/main.py
 FastAPI-Microservice für ETL (Extract, Transform, Load-Vorbereitung) auf Port 8002.
-Kommuniziert direkt mit dem Quality-Gate Microservice (Port 8001).
-Startbefehl:
-    uvicorn services.etl_ingest_service.main:app --host 127.0.0.1 --port 8002 --reload
+Neu: Herausgeber (publisher) und Ablaufdatum (valid_until) werden automatisch ermittelt,
+wenn sie bei Datei-Upload oder URL-Scraping leer gelassen werden.
 """
 
 import json
@@ -39,8 +38,8 @@ for d in (RAW_INBOX_DIR, QUARANTINE_DIR, PROCESSED_CHUNKS_DIR):
 
 app = FastAPI(
     title="HOMIE ETL-Ingest Microservice",
-    description="Liest PDFs/TXT & Hildesheimer Webseiten, prüft sie über das Quality-Gate (Port 8001) und erzeugt semantische Chunks.",
-    version="1.0.0",
+    description="Liest PDFs/TXT & Webseiten, ermittelt Metadaten automatisch, prüft über das Quality-Gate (Port 8001) und erzeugt Chunks.",
+    version="1.1.0",
 )
 
 extractor = DocumentExtractor()
@@ -48,7 +47,6 @@ transformer = DocumentTransformer()
 
 
 def _get_existing_hashes() -> List[str]:
-    """Liest bereits verarbeitete SHA-256 Hashes aus data/processed_chunks/, um Duplikate (§ 10 A) zu erkennen."""
     hashes = []
     for f in PROCESSED_CHUNKS_DIR.glob("*.json"):
         try:
@@ -72,12 +70,6 @@ async def _run_quality_gate_and_transform(
     use_llm_enrichment: bool,
     crawled_sub_urls: Optional[List[str]] = None,
 ) -> ETLProcessResponse:
-    """
-    Zentrale Pipeline:
-    1. Ruft Quality-Gate Microservice (Port 8001) auf.
-    2. Verschiebt abgelehnte Dokumente in data/quarantine/.
-    3. Transformiert & chunkt freigegebene Dokumente.
-    """
     inspection_req = QualityInspectionRequest(
         raw_text=raw_text,
         title=title,
@@ -88,9 +80,8 @@ async def _run_quality_gate_and_transform(
         existing_hashes=_get_existing_hashes(),
     )
 
-    # 1. Quality-Gate Microservice via HTTP aufrufen
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=25.0) as client:
             resp = await client.post(
                 QUALITY_GATE_URL,
                 content=inspection_req.model_dump_json(),
@@ -102,16 +93,12 @@ async def _run_quality_gate_and_transform(
         logger.error(f"Quality-Gate Service unter {QUALITY_GATE_URL} nicht erreichbar: {e}")
         raise HTTPException(
             status_code=502,
-            detail=f"Quality-Gate Microservice (Port 8001) nicht erreichbar. Bitte sicherstellen, dass er läuft: {e}",
+            detail=f"Quality-Gate Microservice (Port 8001) nicht erreichbar: {e}",
         )
 
-    # 2. Wenn Quality-Gate blockiert -> Ab in die Quarantäne!
     if not audit_report.approved_for_ingestion:
         quarantine_file = QUARANTINE_DIR / f"{audit_report.audit_id}_REJECTED.json"
         quarantine_file.write_text(audit_report.model_dump_json(indent=2), encoding="utf-8")
-        logger.warning(
-            f"Dokument '{title}' vom Quality-Gate ABGELEHNT! Gespeichert unter {quarantine_file}"
-        )
         return ETLProcessResponse(
             success=False,
             status_message=f"Dokument durch Quality-Gate blockiert: {'; '.join(audit_report.blocking_reasons)}",
@@ -121,7 +108,6 @@ async def _run_quality_gate_and_transform(
             crawled_sub_urls=crawled_sub_urls or [],
         )
 
-    # 3. Transformation: DIN-Abkürzungen (§ 3B), Glossar (§ 3Bc) & Mehrsprachige Keywords (§ 3D)
     cleaned_text, glossary_notes, glossary_keywords = transformer.clean_and_standardize_text(
         audit_report.sanitized_text
     )
@@ -131,15 +117,13 @@ async def _run_quality_gate_and_transform(
         if kw not in metadata.multilingual_keywords:
             metadata.multilingual_keywords.append(kw)
 
-    # 4. Kontaktdaten (FA-04) & Hildesheimer Stadtteil anreichern
     metadata = await transformer.enrich_metadata(
         cleaned_text, metadata, use_llm=use_llm_enrichment
     )
+    audit_report.extracted_metadata = metadata
 
-    # 5. Semantisches Chunking (300-500 Tokens, ~12% Overlap)
     chunks = transformer.create_semantic_chunks(cleaned_text, metadata, glossary_notes)
 
-    # Chunks lokal als JSON-Zwischenstand sichern (für Review im Debug-UI & Ingestion in ChromaDB)
     chunk_export_path = PROCESSED_CHUNKS_DIR / f"{metadata.doc_id}.json"
     chunk_export_path.write_text(
         json.dumps([c.model_dump(mode="json") for c in chunks], indent=2, ensure_ascii=False),
@@ -148,7 +132,10 @@ async def _run_quality_gate_and_transform(
 
     return ETLProcessResponse(
         success=True,
-        status_message=f"Qualitätsprüfung bestanden und {len(chunks)} semantische Chunks erzeugt.",
+        status_message=(
+            f"Qualitätsprüfung bestanden! Herausgeber ('{metadata.publisher}') & "
+            f"Gültigkeit ('{metadata.valid_until}') gesetzt. {len(chunks)} semantische Chunks erzeugt."
+        ),
         audit_report=audit_report,
         chunks=chunks,
         crawled_sub_urls=crawled_sub_urls or [],
@@ -162,15 +149,11 @@ async def health_check():
 
 @app.post("/api/v1/etl/ingest-file", response_model=ETLProcessResponse)
 async def ingest_file_endpoint(
-    file: UploadFile = File(..., description="PDF- oder TXT-Datei für die Quartiersdatenbank"),
-    publisher: Optional[str] = Form(default="AWO Hildesheim"),
-    valid_until: Optional[date] = Form(default=None, description="Optionales Verfallsdatum YYYY-MM-DD (§ 10 B)"),
+    file: UploadFile = File(..., description="PDF- oder TXT-Datei"),
+    publisher: Optional[str] = Form(default=None, description="Optional: Wird bei leerem Feld automatisch ermittelt"),
+    valid_until: Optional[date] = Form(default=None, description="Optional: Wird bei leerem Feld automatisch ermittelt"),
     use_llm_enrichment: bool = Form(default=True),
 ) -> ETLProcessResponse:
-    """
-    Nimmt eine PDF- oder Textdatei entgegen, speichert sie unter data/raw_inbox/,
-    extrahiert Text & Tabellen, prüft sie im Quality-Gate und erstellt semantische Chunks.
-    """
     safe_filename = Path(file.filename or "upload.txt").name
     saved_path = RAW_INBOX_DIR / safe_filename
 
@@ -178,14 +161,17 @@ async def ingest_file_endpoint(
         with open(saved_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        raw_text, doc_date, title = extractor.extract_from_file(saved_path)
+        raw_text, doc_date, title, auto_pub, auto_valid = extractor.extract_from_file(saved_path)
+        effective_pub = publisher.strip() if (publisher and publisher.strip()) else auto_pub
+        effective_valid = valid_until or auto_valid
+
         return await _run_quality_gate_and_transform(
             raw_text=raw_text,
             title=title,
             source_path_or_url=str(saved_path),
-            publisher=publisher,
+            publisher=effective_pub,
             doc_date=doc_date,
-            valid_until=valid_until,
+            valid_until=effective_valid,
             use_llm_enrichment=use_llm_enrichment,
         )
     except HTTPException:
@@ -197,21 +183,26 @@ async def ingest_file_endpoint(
 
 @app.post("/api/v1/etl/ingest-url", response_model=ETLProcessResponse)
 async def ingest_url_endpoint(req: ScrapeUrlRequest) -> ETLProcessResponse:
-    """
-    Crawlt eine Hildesheimer Whitelist-URL (inkl. strikter robots.txt-Prüfung nach § 9 A
-    und optionalem Link-Crawling Tiefe = 1), prüft den Inhalt im Quality-Gate und erzeugt Chunks.
-    """
     try:
-        scraped_text, page_title, sub_urls = await extractor.scrape_url_with_depth(
+        scraped_text, page_title, sub_urls, auto_pub, auto_valid = await extractor.scrape_url_with_depth(
             start_url=req.url, follow_depth_1=req.follow_links_depth_1
         )
+        user_pub = (req.publisher or "").strip()
+        effective_pub = (
+            user_pub
+            if (user_pub and user_pub != "Webquelle Hildesheim")
+            else auto_pub
+        )
+        # Optionales valid_until unterstützen, falls im Request-Schema oder automatisch erkannt
+        req_valid = getattr(req, "valid_until", None) or auto_valid
+
         return await _run_quality_gate_and_transform(
             raw_text=scraped_text,
             title=page_title,
             source_path_or_url=req.url,
-            publisher=req.publisher,
+            publisher=effective_pub,
             doc_date=date.today(),
-            valid_until=None,
+            valid_until=req_valid,
             use_llm_enrichment=req.use_llm_enrichment,
             crawled_sub_urls=sub_urls,
         )

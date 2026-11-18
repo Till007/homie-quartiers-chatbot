@@ -1,27 +1,726 @@
 {
   "Kurzzeitpflege": {
-    "explanation_simple": "Vorübergehende Betreuung und Pflege in einer Einrichtung für einige Wochen, wenn pflegende Angehörige krank sind oder Urlaub brauchen.",
+    "explanation_simple": "Vorübergehende Betreuung und Pflege in einer vollstationären Pflegeeinrichtung für einen begrenzten Zeitraum, wenn die häusliche Pflege vorübergehend nicht möglich ist oder nicht ausreicht.",
     "do_not_confuse_with": "Dauerhaftes Pflegeheim (Stationäre Langzeitpflege)",
-    "multilingual_keywords": ["short-term care", "geçici bakım", "رعاية قصيرة الأمد", "короткостроковий догляд", "краткосрочный уход"]
+    "multilingual_keywords": [
+      "short-term care",
+      "temporary residential care",
+      "geçici bakım",
+      "kısa süreli bakım",
+      "رعاية قصيرة الأمد",
+      "الرعاية المؤقتة",
+      "замісний догляд",
+      "короткостроковий догляд",
+      "краткосрочный уход"
+    ]
   },
   "Tagespflege": {
-    "explanation_simple": "Tagsüber Betreuung und gemeinsames Essen in einer Einrichtung. Abends und nachts schlafen die pflegebedürftigen Menschen wieder zu Hause.",
-    "do_not_confuse_with": "Altenheim oder dauerhafter Umzug ins Heim",
-    "multilingual_keywords": ["day care for seniors", "gündüz bakımı", "الرعاية النهارية", "денний догляд", "дневной уход"]
+    "explanation_simple": "Tagsüber Betreuung, Pflege, Beschäftigung und gemeinsames Essen in einer Pflegeeinrichtung. Abends und nachts kehren die pflegebedürftigen Menschen in ihre eigene Wohnung zurück.",
+    "do_not_confuse_with": "Altenheim, dauerhafter Umzug ins Heim oder ambulante Pflege zu Hause",
+    "multilingual_keywords": [
+      "day care for seniors",
+      "adult day care",
+      "gündüz bakımı",
+      "yaşlı gündüz bakım merkezi",
+      "الرعاية النهارية",
+      "مركز الرعاية النهارية",
+      "денний догляд",
+      "дневний догляд",
+      "дневной уход"
+    ]
   },
   "Verhinderungspflege": {
-    "explanation_simple": "Geld von der Pflegekasse für eine Ersatz-Pflegekraft zu Hause, wenn die eigentliche Pflegeperson zeitweise verhindert ist.",
-    "do_not_confuse_with": "Verhinderung von Pflege",
-    "multilingual_keywords": ["respite care", "vekaleten bakım", "رعاية بديلة مؤقتة", "замісний догляд", "замещающий уход"]
+    "explanation_simple": "Leistung der Pflegeversicherung zur Finanzierung einer Ersatzpflege, wenn die normalerweise pflegende private Pflegeperson vorübergehend ausfällt, beispielsweise wegen Krankheit, Urlaub oder anderer Termine.",
+    "do_not_confuse_with": "Verhinderung von Pflege oder Kurzzeitpflege. Ersatzpflege kann unter bestimmten Voraussetzungen auch außerhalb der eigenen Wohnung stattfinden.",
+    "multilingual_keywords": [
+      "respite care",
+      "replacement care",
+      "substitute caregiver",
+      "vekaleten bakım",
+      "geçici bakım desteği",
+      "رعاية بديلة مؤقتة",
+      "رعاية الشخص البديل",
+      "замісний догляд",
+      "тимчасова заміна доглядальника",
+      "замещающий уход"
+    ]
   },
   "Pflegegrad": {
-    "explanation_simple": "Stufe von 1 bis 5, die zeigt, wie viel Unterstützung ein Mensch im Alltag benötigt, um Geld und Hilfe von der Pflegekasse zu erhalten.",
-    "do_not_confuse_with": "Behinderungsgrad (GdB)",
-    "multilingual_keywords": ["care level", "bakım derecesi", "درجة الرعاية", "ступінь догляду", "степень ухода"]
+    "explanation_simple": "Einstufung von 1 bis 5 durch die Pflegeversicherung. Der Pflegegrad beschreibt, wie stark die Selbstständigkeit und die Fähigkeiten eines Menschen im Alltag beeinträchtigt sind und welche Pflegeleistungen infrage kommen.",
+    "do_not_confuse_with": "Grad der Behinderung (GdB). Der Pflegegrad bewertet Pflegebedürftigkeit, der GdB die Auswirkungen einer Behinderung auf die Teilhabe.",
+    "multilingual_keywords": [
+      "care level",
+      "degree of care dependency",
+      "bakım derecesi",
+      "pflege seviyesi",
+      "درجة الرعاية",
+      "مستوى الاحتياج للرعاية",
+      "ступінь догляду",
+      "рівень потреби в догляді",
+      "степень ухода"
+    ]
   },
   "Nachbarschaftshilfe": {
-    "explanation_simple": "Ehrenamtliche Hilfe im Alltag durch Menschen aus dem Wohnquartier, zum Beispiel beim Einkaufen, Spazierengehen oder Vorlesen.",
-    "do_not_confuse_with": "Medizinischer Pflegedienst",
-    "multilingual_keywords": ["neighborhood help", "komşuluk yardımı", "مساعدة الجيران", "сусідська допомога", "соседская помощь"]
+    "explanation_simple": "Unterstützung im Alltag durch Nachbarn, Bekannte oder andere Menschen aus dem Wohnumfeld, beispielsweise beim Einkaufen, Spazierengehen, bei Besorgungen oder bei der Freizeitgestaltung. Je nach Landesrecht kann eine Anerkennung als Angebot zur Unterstützung im Alltag erforderlich sein.",
+    "do_not_confuse_with": "Professioneller ambulanter Pflegedienst oder medizinische Behandlungspflege",
+    "multilingual_keywords": [
+      "neighborhood help",
+      "neighborhood support",
+      "komşuluk yardımı",
+      "komşu desteği",
+      "مساعدة الجيران",
+      "المساعدة المجتمعية",
+      "сусідська допомога",
+      "допомога сусідів",
+      "соседская помощь"
+    ]
+  },
+  "Pflegegeld": {
+    "explanation_simple": "Geldleistung der Pflegekasse für pflegebedürftige Menschen mit mindestens Pflegegrad 2, die ihre Pflege selbst organisieren und beispielsweise durch Angehörige, Freunde oder andere private Pflegepersonen versorgt werden.",
+    "do_not_confuse_with": "Pflegesachleistung, die für professionelle ambulante Pflegedienste eingesetzt wird, oder Pflegeunterstützungsgeld.",
+    "multilingual_keywords": [
+      "care allowance",
+      "care cash benefit",
+      "bakım parası",
+      "bakım ödeneği",
+      "بدل الرعاية",
+      "مخصصات الرعاية",
+      "грошова допомога на догляд",
+      "грошова виплата на догляд",
+      "пособие по уходу"
+    ]
+  },
+  "Pflegesachleistung": {
+    "explanation_simple": "Leistung der Pflegeversicherung für professionelle ambulante Pflege durch einen zugelassenen Pflegedienst. Der Pflegedienst rechnet seine Leistungen im Rahmen der gesetzlichen Voraussetzungen mit der Pflegekasse ab.",
+    "do_not_confuse_with": "Pflegegeld, das als Geldleistung an die pflegebedürftige Person ausgezahlt wird.",
+    "multilingual_keywords": [
+      "in-kind care benefits",
+      "professional home care services",
+      "bakım hizmeti",
+      "evde bakım hizmeti",
+      "خدمات الرعاية المنزلية",
+      "خدمات الرعاية المهنية",
+      "професійний догляд вдома",
+      "послуги догляду",
+      "услуги профессионального ухода"
+    ]
+  },
+  "Kombinationsleistung": {
+    "explanation_simple": "Kombination aus Pflegegeld und Pflegesachleistungen. Ein Teil der Pflege wird durch einen professionellen Pflegedienst übernommen und ein anderer Teil durch private Pflegepersonen.",
+    "do_not_confuse_with": "Entweder ausschließlich Pflegegeld oder ausschließlich Pflegesachleistungen.",
+    "multilingual_keywords": [
+      "combined care benefits",
+      "combination of care allowance and services",
+      "karma bakım hizmeti",
+      "birleşik bakım ödeneği",
+      "الجمع بين بدل الرعاية والخدمات",
+      "الجمع بين الرعاية المنزلية والمهنية",
+      "комбінована допомога на догляд",
+      "комбинированный уход"
+    ]
+  },
+  "Entlastungsbetrag": {
+    "explanation_simple": "Monatlicher Leistungsbetrag der Pflegeversicherung zur Finanzierung bestimmter anerkannter Unterstützungsangebote im Alltag, beispielsweise Betreuung, Entlastung pflegender Angehöriger oder anerkannte Haushaltshilfen.",
+    "do_not_confuse_with": "Frei verfügbares Pflegegeld oder eine pauschale Barauszahlung ohne Verwendungsnachweis.",
+    "multilingual_keywords": [
+      "relief allowance",
+      "relief amount for caregivers",
+      "bakım destek ödeneği",
+      "bakım verenleri rahatlatma desteği",
+      "مخصص تخفيف أعباء الرعاية",
+      "دعم مقدمي الرعاية",
+      "допомога для полегшення догляду",
+      "компенсация расходов на уход"
+    ]
+  },
+  "Ambulante Pflege": {
+    "explanation_simple": "Pflege und Unterstützung in der eigenen Wohnung durch einen professionellen ambulanten Pflegedienst. Die pflegebedürftige Person bleibt in ihrem gewohnten Zuhause.",
+    "do_not_confuse_with": "Stationäre Pflege in einem Pflegeheim oder teilstationäre Tagespflege.",
+    "multilingual_keywords": [
+      "home care",
+      "outpatient care",
+      "evde bakım",
+      "evde sağlık ve bakım hizmeti",
+      "الرعاية المنزلية",
+      "الرعاية خارج المستشفى",
+      "амбулаторний догляд",
+      "домашній догляд",
+      "амбулаторный уход"
+    ]
+  },
+  "Stationäre Pflege": {
+    "explanation_simple": "Dauerhafte oder längerfristige Versorgung und Betreuung in einer Pflegeeinrichtung, in der die pflegebedürftige Person wohnt und rund um die Uhr versorgt werden kann.",
+    "do_not_confuse_with": "Kurzzeitpflege oder Tagespflege.",
+    "multilingual_keywords": [
+      "residential nursing care",
+      "long-term residential care",
+      "yatılı bakım",
+      "bakım evi",
+      "الرعاية في دار المسنين",
+      "الرعاية السكنية",
+      "стаціонарний догляд",
+      "догляд у будинку для літніх людей",
+      "стационарный уход"
+    ]
+  },
+  "Teilstationäre Pflege": {
+    "explanation_simple": "Pflege und Betreuung in einer Einrichtung für einen Teil des Tages oder der Nacht. Die pflegebedürftige Person lebt weiterhin zu Hause.",
+    "do_not_confuse_with": "Vollstationäre Pflege oder dauerhafter Aufenthalt in einem Pflegeheim.",
+    "multilingual_keywords": [
+      "day and night care",
+      "part-time residential care",
+      "gündüzlü bakım",
+      "kısmi yatılı bakım",
+      "الرعاية الجزئية",
+      "الرعاية النهارية والليلية",
+      "частковий стаціонарний догляд",
+      "частичный стационарный уход"
+    ]
+  },
+  "Pflegeberatung": {
+    "explanation_simple": "Kostenlose Beratung für pflegebedürftige Menschen und ihre Angehörigen über Pflegeleistungen, Finanzierung, Anträge, Hilfsangebote und die Organisation der Pflege.",
+    "do_not_confuse_with": "Medizinische Beratung durch einen Arzt oder die Begutachtung zur Feststellung eines Pflegegrades.",
+    "multilingual_keywords": [
+      "care consultation",
+      "care advice",
+      "bakım danışmanlığı",
+      "pflege danışmanlığı",
+      "استشارات الرعاية",
+      "المشورة بشأن خدمات الرعاية",
+      "консультація з питань догляду",
+      "консультация по уходу"
+    ]
+  },
+  "Pflegeberatung nach § 7a SGB XI": {
+    "explanation_simple": "Gesetzlich vorgesehene individuelle Pflegeberatung durch die Pflegekasse. Sie unterstützt bei der Ermittlung des persönlichen Hilfebedarfs und bei der Organisation geeigneter Pflege- und Unterstützungsleistungen.",
+    "do_not_confuse_with": "Beratungsbesuch nach § 37 Absatz 3 SGB XI oder allgemeine Beratung durch einen Pflegedienst.",
+    "multilingual_keywords": [
+      "statutory care counselling",
+      "individual care consultation",
+      "bireysel bakım danışmanlığı",
+      "استشارة فردية بشأن الرعاية",
+      "індивідуальна консультація з догляду",
+      "индивидуальная консультация по уходу"
+    ]
+  },
+  "Beratungsbesuch nach § 37 Absatz 3 SGB XI": {
+    "explanation_simple": "Beratungseinsatz für Menschen, die Pflegegeld beziehen und zu Hause gepflegt werden. Dabei wird die Pflegesituation besprochen und die Qualität der häuslichen Versorgung unterstützt.",
+    "do_not_confuse_with": "Erstbegutachtung durch den Medizinischen Dienst oder die allgemeine Pflegeberatung nach § 7a SGB XI.",
+    "multilingual_keywords": [
+      "care counselling visit",
+      "home care advisory visit",
+      "evde bakım danışmanlık ziyareti",
+      "زيارة استشارية للرعاية المنزلية",
+      "консультаційний візит з догляду",
+      "консультационный визит по уходу"
+    ]
+  },
+  "Pflegeperson": {
+    "explanation_simple": "Eine Person, die einen pflegebedürftigen Menschen nicht erwerbsmäßig in seiner häuslichen Umgebung pflegt und unterstützt, beispielsweise ein Familienmitglied, ein Freund oder eine andere nahestehende Person.",
+    "do_not_confuse_with": "Professionelle Pflegefachkraft oder angestellter Mitarbeiter eines ambulanten Pflegedienstes.",
+    "multilingual_keywords": [
+      "informal caregiver",
+      "family caregiver",
+      "bakım veren kişi",
+      "hasta bakıcısı",
+      "مقدم الرعاية",
+      "مقدم الرعاية من أفراد الأسرة",
+      "особа, яка доглядає",
+      "особа, яка здійснює догляд",
+      "лицо, осуществляющее уход"
+    ]
+  },
+  "Pflegehilfsmittel": {
+    "explanation_simple": "Gegenstände und Geräte, die die häusliche Pflege erleichtern, Beschwerden lindern oder eine selbstständigere Lebensführung ermöglichen, beispielsweise Pflegebett, Lagerungshilfen oder bestimmte Verbrauchsprodukte.",
+    "do_not_confuse_with": "Medizinische Hilfsmittel wie Rollstuhl oder Hörgerät, die unter anderen Voraussetzungen von der Krankenversicherung übernommen werden können.",
+    "multilingual_keywords": [
+      "care aids",
+      "nursing aids",
+      "bakım yardımcıları",
+      "bakım malzemeleri",
+      "مساعدات الرعاية",
+      "أدوات المساعدة في الرعاية",
+      "допоміжні засоби для догляду",
+      "средства ухода"
+    ]
+  },
+  "Wohnumfeldverbessernde Maßnahmen": {
+    "explanation_simple": "Bauliche Veränderungen in der Wohnung, die das Leben und die Pflege erleichtern, beispielsweise ein barrierefreier Badumbau, eine bodengleiche Dusche oder Türverbreiterungen.",
+    "do_not_confuse_with": "Allgemeine Renovierung oder Modernisierung ohne Zusammenhang mit der Pflegebedürftigkeit.",
+    "multilingual_keywords": [
+      "home adaptation",
+      "home modification",
+      "ev düzenlemesi",
+      "engelsiz ev düzenlemesi",
+      "تعديل المنزل",
+      "تهيئة المنزل لذوي الاحتياجات",
+      "пристосування житла",
+      "адаптация жилья"
+    ]
+  },
+  "Hausnotruf": {
+    "explanation_simple": "Technisches Notrufsystem für zu Hause. Bei einem Sturz oder einer anderen Notlage kann die betroffene Person per Knopfdruck Hilfe anfordern.",
+    "do_not_confuse_with": "Telefonischer Notruf über 112 oder ein gewöhnliches Telefon ohne automatische Verbindung zu einer Notrufzentrale.",
+    "multilingual_keywords": [
+      "home emergency call",
+      "personal emergency response system",
+      "evde acil çağrı sistemi",
+      "evde yardım çağrı cihazı",
+      "نظام الاستغاثة المنزلية",
+      "جهاز طلب المساعدة",
+      "домашня система екстреного виклику",
+      "система экстренного вызова на дому"
+    ]
+  },
+  "Angebote zur Unterstützung im Alltag": {
+    "explanation_simple": "Anerkannte Unterstützungsangebote, die pflegebedürftigen Menschen helfen, ihren Alltag möglichst selbstständig zu gestalten. Dazu gehören beispielsweise Betreuungsgruppen, Alltagsbegleitung, Haushaltshilfen und Entlastungsangebote für Angehörige.",
+    "do_not_confuse_with": "Medizinische Behandlungspflege oder automatisch erstattungsfähige private Dienstleistungen.",
+    "multilingual_keywords": [
+      "everyday support services",
+      "daily living assistance",
+      "günlük yaşam desteği",
+      "günlük destek hizmetleri",
+      "خدمات الدعم اليومي",
+      "المساعدة في الحياة اليومية",
+      "послуги підтримки в повсякденному житті",
+      "помощь в повседневной жизни"
+    ]
+  },
+  "Alltagsbegleitung": {
+    "explanation_simple": "Unterstützung bei alltäglichen Aktivitäten wie Spazierengehen, Einkaufen, Gesprächen, Arztbesuchen oder der Teilnahme am gesellschaftlichen Leben.",
+    "do_not_confuse_with": "Grundpflege, medizinische Behandlungspflege oder professionelle medizinische Betreuung.",
+    "multilingual_keywords": [
+      "daily living assistance",
+      "everyday companion",
+      "günlük yaşam refakati",
+      "günlük yaşam desteği",
+      "المرافقة اليومية",
+      "المساعدة اليومية",
+      "супровід у повсякденному житті",
+      "сопровождение в повседневной жизни"
+    ]
+  },
+  "Haushaltshilfe": {
+    "explanation_simple": "Unterstützung bei hauswirtschaftlichen Aufgaben wie Putzen, Wäschewaschen, Einkaufen, Kochen und Aufräumen. Die Kostenübernahme kann je nach Anspruch über unterschiedliche Sozialleistungsträger erfolgen.",
+    "do_not_confuse_with": "Körperbezogene Pflege oder medizinische Behandlungspflege.",
+    "multilingual_keywords": [
+      "domestic help",
+      "household assistance",
+      "ev işleri yardımı",
+      "ev yardımcısı",
+      "المساعدة المنزلية",
+      "خدمات التدبير المنزلي",
+      "допомога по господарству",
+      "домашняя помощь"
+    ]
+  },
+  "Grundpflege": {
+    "explanation_simple": "Unterstützung bei grundlegenden körperbezogenen Aktivitäten wie Waschen, Duschen, Anziehen, Essen, Trinken und Mobilität. Der Begriff wird insbesondere im Zusammenhang mit älteren Pflegekonzepten und der praktischen Pflege verwendet.",
+    "do_not_confuse_with": "Behandlungspflege, bei der medizinisch notwendige Maßnahmen wie Medikamentengabe oder Wundversorgung durchgeführt werden.",
+    "multilingual_keywords": [
+      "basic nursing care",
+      "personal care",
+      "temel bakım",
+      "kişisel bakım",
+      "الرعاية الأساسية",
+      "العناية الشخصية",
+      "основний догляд",
+      "базовый уход"
+    ]
+  },
+  "Behandlungspflege": {
+    "explanation_simple": "Medizinisch notwendige pflegerische Maßnahmen, die aufgrund einer ärztlichen Verordnung durchgeführt werden, beispielsweise Wundversorgung, Injektionen, Medikamentengabe oder Blutdruckkontrolle.",
+    "do_not_confuse_with": "Grundpflege und allgemeine Unterstützung im Haushalt.",
+    "multilingual_keywords": [
+      "medical nursing care",
+      "treatment-related care",
+      "tıbbi bakım",
+      "tedavi amaçlı bakım",
+      "الرعاية الطبية التمريضية",
+      "العناية الطبية",
+      "медичний догляд",
+      "лечебный уход"
+    ]
+  },
+  "Häusliche Krankenpflege": {
+    "explanation_simple": "Medizinisch notwendige Pflege und Unterstützung in der eigenen Wohnung, die unter bestimmten Voraussetzungen von der gesetzlichen Krankenversicherung übernommen wird. Sie kann Behandlungspflege, Grundpflege und hauswirtschaftliche Versorgung umfassen.",
+    "do_not_confuse_with": "Leistungen der sozialen Pflegeversicherung nach SGB XI. Häusliche Krankenpflege gehört grundsätzlich zum Leistungsbereich der Krankenversicherung nach SGB V.",
+    "multilingual_keywords": [
+      "home nursing care",
+      "home healthcare",
+      "evde sağlık hizmeti",
+      "evde hemşirelik hizmeti",
+      "الرعاية الصحية المنزلية",
+      "التمريض المنزلي",
+      "домашній медичний догляд",
+      "медицинский уход на дому"
+    ]
+  },
+  "Mobilität": {
+    "explanation_simple": "Fähigkeit, sich selbstständig oder mit Unterstützung fortzubewegen, beispielsweise aufzustehen, zu gehen, Treppen zu steigen oder die Körperposition zu verändern.",
+    "do_not_confuse_with": "Allgemeine körperliche Fitness oder ausschließlich die Nutzung eines Rollstuhls.",
+    "multilingual_keywords": [
+      "mobility",
+      "movement ability",
+      "hareket kabiliyeti",
+      "hareketlilik",
+      "القدرة على الحركة",
+      "التنقل",
+      "мобільність",
+      "здатність пересуватися",
+      "подвижность"
+    ]
+  },
+  "Demenz": {
+    "explanation_simple": "Erkrankungsbedingter Verlust oder Rückgang geistiger Fähigkeiten wie Gedächtnis, Orientierung, Sprache und Denkvermögen. Betroffene Menschen benötigen häufig Unterstützung bei alltäglichen Aktivitäten.",
+    "do_not_confuse_with": "Normale altersbedingte Vergesslichkeit oder eine einzelne Gedächtnisstörung.",
+    "multilingual_keywords": [
+      "dementia",
+      "bunama",
+      "demans",
+      "الخرف",
+      "مرض الخرف",
+      "деменція",
+      "старече слабоумство",
+      "деменция"
+    ]
+  },
+  "Betreuungsgruppe": {
+    "explanation_simple": "Gruppenangebot, in dem Menschen mit Unterstützungsbedarf gemeinsam betreut, beschäftigt und aktiviert werden. Es kann gleichzeitig pflegende Angehörige entlasten.",
+    "do_not_confuse_with": "Tagespflege als eigenständige teilstationäre Pflegeleistung.",
+    "multilingual_keywords": [
+      "care group",
+      "support group",
+      "bakım grubu",
+      "destek grubu",
+      "مجموعة رعاية",
+      "مجموعة دعم",
+      "група підтримки",
+      "группа ухода"
+    ]
+  },
+  "Pflegebedürftigkeit": {
+    "explanation_simple": "Ein Zustand, in dem ein Mensch wegen gesundheitlich bedingter Beeinträchtigungen der Selbstständigkeit oder Fähigkeiten dauerhaft oder voraussichtlich für mindestens sechs Monate Unterstützung benötigt.",
+    "do_not_confuse_with": "Vorübergehende Krankheit, kurzfristige Verletzung oder eine Behinderung ohne pflegerischen Unterstützungsbedarf.",
+    "multilingual_keywords": [
+      "need for care",
+      "care dependency",
+      "bakım ihtiyacı",
+      "bakıma muhtaçlık",
+      "الحاجة إلى الرعاية",
+      "الاحتياج إلى العناية",
+      "потреба в догляді",
+      "потребность в уходе"
+    ]
+  },
+  "Pflegegradbegutachtung": {
+    "explanation_simple": "Verfahren, bei dem der Medizinische Dienst oder ein anderer zuständiger Gutachter den Unterstützungsbedarf einer Person untersucht und bewertet, um einen Pflegegrad festzustellen.",
+    "do_not_confuse_with": "Ärztliche Diagnose, Feststellung des Grades der Behinderung oder medizinische Untersuchung zur Arbeitsunfähigkeit.",
+    "multilingual_keywords": [
+      "care needs assessment",
+      "nursing assessment",
+      "bakım değerlendirmesi",
+      "bakım seviyesi değerlendirmesi",
+      "تقييم الحاجة إلى الرعاية",
+      "تقييم مستوى الرعاية",
+      "оцінювання потреби в догляді",
+      "оценка потребности в уходе"
+    ]
+  },
+  "Medizinischer Dienst": {
+    "explanation_simple": "Unabhängige sozialmedizinische Begutachtungs- und Beratungsorganisation, die unter anderem Pflegegradbegutachtungen für gesetzliche Pflegekassen durchführt.",
+    "do_not_confuse_with": "Medizinischer Dienst der Krankenversicherung (MDK), der die frühere Bezeichnung war, oder der behandelnde Hausarzt.",
+    "multilingual_keywords": [
+      "Medical Service",
+      "medical assessment service",
+      "tıbbi hizmet kurumu",
+      "sağlık değerlendirme kurumu",
+      "الخدمة الطبية",
+      "هيئة التقييم الطبي",
+      "медична служба",
+      "медицинская служба"
+    ]
+  },
+  "Widerspruch gegen den Pflegegrad": {
+    "explanation_simple": "Rechtsmittel gegen einen Bescheid der Pflegekasse, wenn die betroffene Person mit der Entscheidung über den Pflegegrad nicht einverstanden ist. Der Widerspruch muss grundsätzlich innerhalb eines Monats nach Bekanntgabe des Bescheids eingelegt werden, sofern keine besondere Fristregelung greift.",
+    "do_not_confuse_with": "Neuantrag auf einen Pflegegrad oder Antrag auf Höherstufung.",
+    "multilingual_keywords": [
+      "objection to care level decision",
+      "appeal against care assessment",
+      "bakım derecesine itiraz",
+      "pflege kararına itiraz",
+      "الاعتراض على قرار درجة الرعاية",
+      "الطعن في تقييم الرعاية",
+      "оскарження рішення щодо ступеня догляду",
+      "обжалование решения о степени ухода"
+    ]
+  },
+  "Höherstufungsantrag": {
+    "explanation_simple": "Antrag bei der Pflegekasse auf einen höheren Pflegegrad, wenn sich der Gesundheitszustand verschlechtert hat oder der Unterstützungsbedarf im Alltag gestiegen ist.",
+    "do_not_confuse_with": "Widerspruch gegen eine bereits getroffene Pflegegradentscheidung oder erstmaliger Pflegegradantrag.",
+    "multilingual_keywords": [
+      "application for higher care level",
+      "care level increase request",
+      "bakım derecesi yükseltme başvurusu",
+      "رفع درجة الرعاية",
+      "заява на підвищення ступеня догляду",
+      "заявление на повышение степени ухода"
+    ]
+  },
+  "Pflegegrad beantragen": {
+    "explanation_simple": "Antrag bei der Pflegekasse, damit geprüft wird, ob eine Pflegebedürftigkeit vorliegt und welcher Pflegegrad festgestellt werden kann.",
+    "do_not_confuse_with": "Antrag auf einen Schwerbehindertenausweis oder Feststellung des Grades der Behinderung.",
+    "multilingual_keywords": [
+      "apply for care level",
+      "care level application",
+      "bakım derecesi başvurusu",
+      "رعاية طلب تقديم",
+      "طلب تحديد درجة الرعاية",
+      "подати заяву на встановлення ступеня догляду",
+      "заявление на получение степени ухода"
+    ]
+  },
+  "Pflegeunterstützungsgeld": {
+    "explanation_simple": "Lohnersatzleistung für Beschäftigte, die kurzfristig der Arbeit fernbleiben müssen, um die Pflege eines nahen Angehörigen in einer akuten Pflegesituation zu organisieren oder sicherzustellen.",
+    "do_not_confuse_with": "Pflegegeld, das pflegebedürftige Menschen von der Pflegeversicherung erhalten.",
+    "multilingual_keywords": [
+      "care support allowance",
+      "caregiver wage replacement benefit",
+      "bakım desteği ödeneği",
+      "بدل دعم مقدم الرعاية",
+      "допомога особі, яка доглядає",
+      "пособие по уходу за родственником"
+    ]
+  },
+  "Pflegezeit": {
+    "explanation_simple": "Gesetzlich geregelte Möglichkeit für Beschäftigte, sich für eine begrenzte Zeit ganz oder teilweise von der Arbeit freistellen zu lassen, um einen nahen Angehörigen in häuslicher Umgebung zu pflegen.",
+    "do_not_confuse_with": "Urlaub, Elternzeit oder medizinische Krankschreibung.",
+    "multilingual_keywords": [
+      "care leave",
+      "caregiver leave",
+      "bakım izni",
+      "hasta yakını bakım izni",
+      "إجازة رعاية الأقارب",
+      "إجازة مقدم الرعاية",
+      "відпустка для догляду",
+      "отпуск по уходу за родственником"
+    ]
+  },
+  "Familienpflegezeit": {
+    "explanation_simple": "Gesetzlich geregelte Möglichkeit, die Arbeitszeit für einen längeren Zeitraum zu reduzieren, um einen nahen Angehörigen zu pflegen und weiterhin berufstätig zu bleiben.",
+    "do_not_confuse_with": "Kurzzeitige Arbeitsverhinderung oder vollständige Pflegezeit.",
+    "multilingual_keywords": [
+      "family care leave",
+      "reduced working hours for caregiving",
+      "aile bakım izni",
+      "إجازة رعاية الأسرة",
+      "تقليل ساعات العمل لرعاية أحد أفراد الأسرة",
+      "відпустка для догляду за членом сім'ї",
+      "семейный отпуск по уходу"
+    ]
+  },
+  "Pflegehilfsmittel zum Verbrauch": {
+    "explanation_simple": "Verbrauchsprodukte, die für die häusliche Pflege benötigt werden, beispielsweise Einmalhandschuhe, Bettschutzeinlagen, Desinfektionsmittel oder Schutzschürzen. Für die Kostenübernahme gelten gesetzliche Voraussetzungen und Höchstbeträge.",
+    "do_not_confuse_with": "Dauerhafte technische Pflegehilfsmittel wie Pflegebett oder Hausnotruf.",
+    "multilingual_keywords": [
+      "disposable care supplies",
+      "consumable nursing aids",
+      "tek kullanımlık bakım malzemeleri",
+      "مواد الرعاية المستهلكة",
+      "одноразові засоби догляду",
+      "расходные материалы для ухода"
+    ]
+  },
+  "Pflegebett": {
+    "explanation_simple": "Spezielles Bett für pflegebedürftige Menschen, das beispielsweise in der Höhe verstellt werden kann und die Pflege, Mobilisierung und Lagerung erleichtert.",
+    "do_not_confuse_with": "Normales Krankenbett im Krankenhaus oder gewöhnliches höhenverstellbares Bett.",
+    "multilingual_keywords": [
+      "nursing bed",
+      "care bed",
+      "bakım yatağı",
+      "hasta yatağı",
+      "سرير الرعاية",
+      "سرير طبي",
+      "ліжко для догляду",
+      "медицинская кровать"
+    ]
+  },
+  "Barrierefreiheit": {
+    "explanation_simple": "Gestaltung von Wohnungen, Gebäuden, Verkehrsmitteln und digitalen Angeboten so, dass Menschen mit unterschiedlichen Einschränkungen sie möglichst selbstständig nutzen können.",
+    "do_not_confuse_with": "Ausschließlich rollstuhlgerechter Zugang oder eine einzelne bauliche Anpassung.",
+    "multilingual_keywords": [
+      "accessibility",
+      "barrier-free access",
+      "engelsiz erişim",
+      "erişilebilirlik",
+      "إمكانية الوصول",
+      "إزالة الحواجز",
+      "безбар'єрність",
+      "доступність",
+      "безбарьерная среда"
+    ]
+  },
+  "Entlassmanagement": {
+    "explanation_simple": "Organisation der weiteren Versorgung eines Patienten nach einem Krankenhausaufenthalt. Dazu gehören beispielsweise die Organisation von Pflege, Medikamenten, Hilfsmitteln oder einer Anschlussrehabilitation.",
+    "do_not_confuse_with": "Normale Krankenhausentlassung ohne koordinierte Anschlussversorgung.",
+    "multilingual_keywords": [
+      "hospital discharge management",
+      "discharge planning",
+      "hastane taburculuk planlaması",
+      "إدارة الخروج من المستشفى",
+      "تنظيم الرعاية بعد الخروج",
+      "планування виписки з лікарні",
+      "планирование выписки из больницы"
+    ]
+  },
+  "Anschlussheilbehandlung": {
+    "explanation_simple": "Medizinische Rehabilitation, die sich zeitnah an einen Krankenhausaufenthalt anschließt, um die körperlichen oder gesundheitlichen Folgen einer Erkrankung oder Operation zu verbessern.",
+    "do_not_confuse_with": "Allgemeine ambulante Physiotherapie oder eine unabhängige Rehabilitationsmaßnahme ohne vorherigen Krankenhausaufenthalt.",
+    "multilingual_keywords": [
+      "post-acute rehabilitation",
+      "follow-up rehabilitation",
+      "hastane sonrası rehabilitasyon",
+      "إعادة التأهيل بعد العلاج في المستشفى",
+      "реабілітація після госпіталізації",
+      "реабилитация после госпитализации"
+    ]
+  },
+  "Eingliederungshilfe": {
+    "explanation_simple": "Leistungen zur Unterstützung von Menschen mit wesentlichen Behinderungen oder drohenden wesentlichen Behinderungen, damit sie möglichst selbstbestimmt leben und gleichberechtigt am gesellschaftlichen Leben teilnehmen können.",
+    "do_not_confuse_with": "Grundsicherung, Bürgergeld oder ausschließlich medizinische Behandlung.",
+    "multilingual_keywords": [
+      "integration assistance",
+      "participation assistance",
+      "engelli bireylere destek",
+      "engellilik desteği",
+      "مساعدة الإدماج",
+      "دعم المشاركة المجتمعية",
+      "допомога для інтеграції",
+      "підтримка участі в суспільному житті"
+    ]
+  },
+  "Persönliches Budget": {
+    "explanation_simple": "Geldleistung oder Gutscheine, mit denen Menschen mit Behinderungen oder Unterstützungsbedarf benötigte Teilhabeleistungen selbst organisieren und bezahlen können, statt ausschließlich Sachleistungen zu erhalten.",
+    "do_not_confuse_with": "Pflegegeld oder ein frei verfügbares Einkommen ohne Zweckbindung.",
+    "multilingual_keywords": [
+      "personal budget",
+      "individual support budget",
+      "kişisel bütçe",
+      "bireysel destek bütçesi",
+      "الميزانية الشخصية",
+      "ميزانية الدعم الفردي",
+      "особистий бюджет",
+      "индивидуальный бюджет"
+    ]
+  },
+  "Betreutes Wohnen": {
+    "explanation_simple": "Wohnform, bei der Menschen selbstständig in einer eigenen Wohnung oder Wohnanlage leben und bei Bedarf zusätzliche Unterstützungs- oder Betreuungsleistungen erhalten können.",
+    "do_not_confuse_with": "Vollstationäres Pflegeheim oder automatisch enthaltene Rund-um-die-Uhr-Pflege.",
+    "multilingual_keywords": [
+      "assisted living",
+      "supported living",
+      "destekli yaşam",
+      "yardımlı yaşam",
+      "السكن المدعوم",
+      "السكن مع المساعدة",
+      "підтримане проживання",
+      "жилье с поддержкой"
+    ]
+  },
+  "Pflege-Wohngemeinschaft": {
+    "explanation_simple": "Gemeinsame Wohnform, in der mehrere pflegebedürftige Menschen zusammenleben und ihren Alltag organisieren. Pflege und Betreuung werden je nach Konzept durch ambulante Dienste oder andere Unterstützungsangebote erbracht.",
+    "do_not_confuse_with": "Klassisches Pflegeheim oder gewöhnliche Wohngemeinschaft ohne Pflegeangebot.",
+    "multilingual_keywords": [
+      "shared care housing",
+      "assisted living community",
+      "bakım ortak konutu",
+      "ortak bakım evi",
+      "سكن مشترك للرعاية",
+      "مجتمع سكني للرعاية",
+      "спільне проживання з доглядом",
+      "совместное проживание с уходом"
+    ]
+  },
+  "Angehörigenentlastung": {
+    "explanation_simple": "Unterstützungsangebote, die pflegende Familienmitglieder körperlich und psychisch entlasten, beispielsweise durch stundenweise Betreuung, Tagespflege, Kurzzeitpflege oder Beratungsangebote.",
+    "do_not_confuse_with": "Ausschließlich finanzielle Pflegeleistungen oder Pflegegeld.",
+    "multilingual_keywords": [
+      "caregiver relief",
+      "family caregiver support",
+      "aile bakımı desteği",
+      "yakınların yükünü hafifletme",
+      "دعم وتخفيف أعباء أفراد الأسرة",
+      "مساندة مقدمي الرعاية",
+      "підтримка родичів, які доглядають",
+      "поддержка родственников, осуществляющих уход"
+    ]
+  },
+  "Verhinderungspflege durch Angehörige": {
+    "explanation_simple": "Ersatzpflege durch Familienangehörige oder andere nahestehende Personen, wenn die reguläre Pflegeperson verhindert ist. Für die Erstattung können besondere gesetzliche Voraussetzungen und Begrenzungen gelten.",
+    "do_not_confuse_with": "Reguläres Pflegegeld oder die dauerhafte Übernahme der Pflege durch Familienangehörige.",
+    "multilingual_keywords": [
+      "respite care by family members",
+      "family replacement caregiver",
+      "aile üyeleri tarafından geçici bakım",
+      "رعاية بديلة من أفراد الأسرة",
+      "тимчасовий догляд членами сім'ї",
+      "временный уход членами семьи"
+    ]
+  },
+  "Nachtpflege": {
+    "explanation_simple": "Teilstationäre Pflege und Betreuung während der Nacht in einer dafür vorgesehenen Einrichtung. Sie kann Angehörige entlasten und eine Versorgung zu Hause tagsüber ermöglichen.",
+    "do_not_confuse_with": "Tagespflege oder dauerhafte stationäre Unterbringung.",
+    "multilingual_keywords": [
+      "night care",
+      "overnight care",
+      "gece bakımı",
+      "gece bakım hizmeti",
+      "الرعاية الليلية",
+      "الرعاية أثناء الليل",
+      "нічний догляд",
+      "ночной уход"
+    ]
+  },
+  "Sterbebegleitung": {
+    "explanation_simple": "Menschliche, pflegerische und psychosoziale Begleitung von Menschen in ihrer letzten Lebensphase, um Würde, Lebensqualität und individuelle Wünsche zu unterstützen.",
+    "do_not_confuse_with": "Aktive Sterbehilfe oder ausschließlich medizinische Schmerzbehandlung.",
+    "multilingual_keywords": [
+      "end-of-life care",
+      "palliative support",
+      "yaşam sonu bakımı",
+      "ölüm sürecinde destek",
+      "رعاية نهاية الحياة",
+      "مرافقة المحتضر",
+      "супровід наприкінці життя",
+      "уход в конце жизни"
+    ]
+  },
+  "Palliativversorgung": {
+    "explanation_simple": "Ganzheitliche Versorgung von Menschen mit einer schweren, fortschreitenden und nicht heilbaren Erkrankung. Ziel ist die Linderung von Schmerzen und anderen Beschwerden sowie die Verbesserung der Lebensqualität.",
+    "do_not_confuse_with": "Ausschließlich Sterbebegleitung oder der Verzicht auf sämtliche medizinische Behandlungen.",
+    "multilingual_keywords": [
+      "palliative care",
+      "palliative treatment",
+      "palyatif bakım",
+      "palyatif tedavi",
+      "الرعاية التلطيفية",
+      "العلاج التلطيفي",
+      "паліативна допомога",
+      "паллиативная помощь"
+    ]
+  },
+  "Häusliche Versorgung": {
+    "explanation_simple": "Gesamtheit aller Pflege-, Betreuungs- und Unterstützungsleistungen, die ein Mensch in seiner eigenen Wohnung erhält, um möglichst lange zu Hause leben zu können.",
+    "do_not_confuse_with": "Ausschließlich medizinische Hausbesuche oder ausschließlich ambulante Grundpflege.",
+    "multilingual_keywords": [
+      "home-based care",
+      "home support",
+      "evde bakım",
+      "evde destek",
+      "الرعاية المنزلية",
+      "الدعم المنزلي",
+      "домашній догляд",
+      "поддержка на дому"
+    ]
   }
 }

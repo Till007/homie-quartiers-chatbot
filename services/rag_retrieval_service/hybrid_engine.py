@@ -2,20 +2,18 @@
 services/rag_retrieval_service/hybrid_engine.py
 Implementiert den vollständigen Hybrid-Retriever gemäß HOMIE-Architektur:
 - Dense Retrieval: ChromaDB (HNSW) + BAAI/bge-m3 (CPU)
-- Lexical Retrieval: BM25Okapi (auf inkludierten mehrsprachigen Schlagworten & DIN-Langformen)
+- Lexical Retrieval: BM25Okapi
 - Fusion: Reciprocal Rank Fusion (RRF)
-- Reranking: Cross-Encoder (BAAI/bge-reranker-v2-m3) + Boost für Leichte Sprache (§ 2 H b) & SSOT (§ 1 B)
-- Schutzmechanismen: Quellen-Guard (Schwellenwert) & TTL-Verfallsdatum-Prüfung (§ 10 B c)
+- Reranking: Cross-Encoder (BAAI/bge-reranker-v2-m3) auf sauberem Text (Titel + text_raw) + Dense-Kalibrierung
 """
 
-import json
 import math
 import os
 import pickle
 import re
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import chromadb
 from chromadb.config import Settings
@@ -35,7 +33,6 @@ from shared.schemas import (
 
 logger = get_service_logger("rag-hybrid-engine")
 
-# Pfade für das portable Offline-Produktionsbündel (§ 11 C b)
 BUNDLE_DIR = Path(os.getenv("PRODUCTION_BUNDLE_DIR", "data/production_bundle"))
 CHROMA_DIR = BUNDLE_DIR / "chroma_db"
 BM25_FILE = BUNDLE_DIR / "bm25_store.pkl"
@@ -44,21 +41,14 @@ MODELS_CACHE_DIR = Path(os.getenv("MODELS_CACHE_DIR", "data/models_cache"))
 for directory in (BUNDLE_DIR, CHROMA_DIR, MODELS_CACHE_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
-# Modellnamen (für extrem schnelle Tests per ENV austauschbar, Standard laut Architektur: BGE-M3)
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-m3")
 RERANKER_MODEL_NAME = os.getenv("RERANKER_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
 
 
 class HybridRetrievalEngine:
-    """
-    Verwaltet ChromaDB + BM25 im Ordner data/production_bundle/ und führt die
-    mehrstufige Retrieval-Pipeline inkl. Quellen-Guard aus.
-    """
-
     def __init__(self):
         logger.info("Initialisiere HybridRetrievalEngine (CPU-Modus zur VRAM-Schonung)...")
 
-        # 1. Persistente ChromaDB (HNSW mit Cosine-Similarity) initialisieren
         self.chroma_client = chromadb.PersistentClient(
             path=str(CHROMA_DIR),
             settings=Settings(anonymized_telemetry=False),
@@ -68,7 +58,6 @@ class HybridRetrievalEngine:
             metadata={"hnsw:space": "cosine"},
         )
 
-        # 2. Embedding-Modell (BGE-M3) & Cross-Encoder Reranker auf CPU laden
         logger.info(f"Lade Embedding-Modell '{EMBEDDING_MODEL_NAME}' auf CPU...")
         self.embedder = SentenceTransformer(
             EMBEDDING_MODEL_NAME,
@@ -83,7 +72,6 @@ class HybridRetrievalEngine:
             max_length=512,
         )
 
-        # 3. BM25-Speicher (hält DocumentChunk-Objekte & Token-Korpus synchron zu ChromaDB)
         self.chunk_store: Dict[str, DocumentChunk] = {}
         self.bm25_ids: List[str] = []
         self.bm25_index: Optional[BM25Okapi] = None
@@ -93,17 +81,11 @@ class HybridRetrievalEngine:
             f"HybridRetrievalEngine bereit. Aktuell indexierte Chunks: {len(self.chunk_store)}"
         )
 
-    # =================================================================
-    # 1. INDEX-VERWALTUNG, VEKTOR-ERSETZUNG (§ 10 A c) & BM25-SYNC
-    # =================================================================
-
     def _tokenize_for_bm25(self, text: str) -> List[str]:
-        """Einfacher, robuster mehrsprachiger Tokenizer für BM25."""
         cleaned = re.sub(r"[^\w\säöüßÄÖÜçğıöşüÇĞİÖŞÜ]", " ", text.lower())
         return [tok for tok in cleaned.split() if len(tok) > 1]
 
     def _rebuild_bm25_in_memory(self) -> None:
-        """Baut den BM25-Index aus allen im chunk_store befindlichen Chunks neu auf."""
         self.bm25_ids = list(self.chunk_store.keys())
         if not self.bm25_ids:
             self.bm25_index = None
@@ -115,7 +97,6 @@ class HybridRetrievalEngine:
         self.bm25_index = BM25Okapi(tokenized_corpus)
 
     def _save_bm25_store(self) -> None:
-        """Speichert den BM25-Store persistent im production_bundle für den Offline-Roboter."""
         try:
             serializable_data = {
                 cid: chunk.model_dump(mode="json") for cid, chunk in self.chunk_store.items()
@@ -126,7 +107,6 @@ class HybridRetrievalEngine:
             logger.error(f"Fehler beim Speichern des BM25-Stores: {e}", exc_info=True)
 
     def _load_bm25_store(self) -> None:
-        """Lädt den BM25-Store beim Start von der Festplatte."""
         if not BM25_FILE.exists():
             return
         try:
@@ -140,10 +120,6 @@ class HybridRetrievalEngine:
             logger.error(f"Fehler beim Laden des BM25-Stores: {e}", exc_info=True)
 
     def upsert_chunks(self, chunks: List[DocumentChunk], replace_existing_doc: bool = True) -> int:
-        """
-        Fügt neue Chunks in ChromaDB und BM25 ein.
-        Setzt § 10 A c um: Bei Updates werden alte Vektoren derselben doc_id oder Quelle gelöscht.
-        """
         if not chunks:
             return 0
 
@@ -155,15 +131,13 @@ class HybridRetrievalEngine:
         texts_to_embed = [c.text_for_indexing for c in chunks]
         chunk_ids = [c.chunk_id for c in chunks]
 
-        # Berechne normalisierte BGE-M3 Embeddings
         embeddings = self.embedder.encode(
             texts_to_embed,
             normalize_embeddings=True,
             show_progress_bar=False,
         ).tolist()
 
-        # Bereite flache Metadaten für ChromaDB vor (Chroma unterstützt nur str, int, float, bool)
-        chroma_metadatas: List[Dict[str, Any]] = []
+        chroma_metadatas: Any = []
         for c in chunks:
             m = c.metadata
             chroma_metadatas.append(
@@ -186,7 +160,6 @@ class HybridRetrievalEngine:
             )
             self.chunk_store[c.chunk_id] = c
 
-        # Upsert in ChromaDB
         self.collection.upsert(
             ids=chunk_ids,
             embeddings=embeddings,
@@ -194,7 +167,6 @@ class HybridRetrievalEngine:
             metadatas=chroma_metadatas,
         )
 
-        # BM25 aktualisieren und speichern
         self._rebuild_bm25_in_memory()
         self._save_bm25_store()
 
@@ -202,7 +174,6 @@ class HybridRetrievalEngine:
         return len(chunks)
 
     def _remove_chunks_by_doc_or_source(self, doc_ids: set, sources: set) -> None:
-        """§ 10 A c: Entfernt veraltete Chunks eines Dokuments vor dem Neu-Indexieren."""
         to_delete = [
             cid
             for cid, ch in self.chunk_store.items()
@@ -218,13 +189,9 @@ class HybridRetrievalEngine:
                 self.chunk_store.pop(cid, None)
 
     def run_ttl_maintenance(self) -> Dict[str, int]:
-        """
-        § 10 B a/b/c: Prüft alle indexierten Chunks auf Überschreitung des valid_until-Datums.
-        Markiert abgelaufene Chunks als historisch (is_expired = True), ohne sie zu löschen.
-        """
         today = date.today()
         newly_expired = 0
-        for cid, chunk in self.chunk_store.items():
+        for chunk in self.chunk_store.values():
             v_until = chunk.metadata.valid_until
             if v_until and v_until < today and not chunk.metadata.is_expired:
                 chunk.metadata.is_expired = True
@@ -235,25 +202,12 @@ class HybridRetrievalEngine:
 
         return {"total_chunks": len(self.chunk_store), "newly_marked_expired": newly_expired}
 
-    # =================================================================
-    # 2. HYBRID RETRIEVAL (BM25 + DENSE + RRF + RERANKER + GUARD)
-    # =================================================================
-
     def retrieve(self, req: RetrievalRequest) -> RetrievalResponse:
-        """
-        Führt die mehrstufige Suche gemäß UML-Sequenzdiagramm aus:
-        1. Vorfilterung nach Metadaten (FA-03, § 2 D, § 2 I)
-        2. Dense Search (ChromaDB) + Lexical Search (BM25)
-        3. Reciprocal Rank Fusion (RRF)
-        4. Cross-Encoder Reranking + Leichte-Sprache-Boost (§ 2 H b)
-        5. Quellen-Guard Schwellenwert-Prüfung (FA-06)
-        """
         if not self.chunk_store:
             return self._build_fallback_response(
                 req, "Wissensbasis ist noch leer. Bitte zuerst Dokumente über den ETL-Service indexieren."
             )
 
-        # 1. Kandidaten-Menge anhand der Filter (FA-03) bestimmen
         allowed_chunk_ids = self._apply_metadata_filters(req.filters)
         if not allowed_chunk_ids:
             return self._build_fallback_response(
@@ -262,7 +216,7 @@ class HybridRetrievalEngine:
                 "wurde kein passendes Angebot in der Datenbank gefunden.",
             )
 
-        # 2A. Dense Search in ChromaDB (BGE-M3)
+        # 1. Dense Search in ChromaDB (inkl. Cosine-Similarity aus Distanzen)
         query_vec = self.embedder.encode(
             [req.query], normalize_embeddings=True, show_progress_bar=False
         ).tolist()
@@ -271,11 +225,21 @@ class HybridRetrievalEngine:
         chroma_res = self.collection.query(
             query_embeddings=query_vec,
             n_results=max(n_results, 1),
+            include=["distances"],
         )
-        raw_dense_ids = chroma_res.get("ids", [[]])[0]
-        dense_ranked_ids = [cid for cid in raw_dense_ids if cid in allowed_chunk_ids][: req.top_k_candidates]
+        raw_dense_ids = (chroma_res.get("ids") or [[]])[0]
+        raw_distances = (chroma_res.get("distances") or [[]])[0]
 
-        # 2B. Lexikalische BM25-Suche
+        dense_sim_map: Dict[str, float] = {}
+        dense_ranked_ids: List[str] = []
+        for cid, dist in zip(raw_dense_ids, raw_distances):
+            if cid in allowed_chunk_ids:
+                # Cosine-Similarity = 1.0 - Cosine-Distance
+                dense_sim_map[cid] = max(0.0, min(1.0, 1.0 - float(dist)))
+                if len(dense_ranked_ids) < req.top_k_candidates:
+                    dense_ranked_ids.append(cid)
+
+        # 2. Lexikalische BM25-Suche
         bm25_ranked_ids: List[str] = []
         if self.bm25_index and self.bm25_ids:
             query_tokens = self._tokenize_for_bm25(req.query)
@@ -288,7 +252,7 @@ class HybridRetrievalEngine:
             scored_pairs.sort(key=lambda x: x[1], reverse=True)
             bm25_ranked_ids = [cid for cid, _ in scored_pairs[: req.top_k_candidates]]
 
-        # 3. Reciprocal Rank Fusion (RRF, Konstante k = 60)
+        # 3. Reciprocal Rank Fusion (RRF, k = 60)
         rrf_k = 60
         rrf_scores: Dict[str, float] = {}
         dense_rank_map: Dict[str, int] = {}
@@ -302,7 +266,6 @@ class HybridRetrievalEngine:
             bm25_rank_map[cid] = rank_idx
             rrf_scores[cid] = rrf_scores.get(cid, 0.0) + (1.0 / (rrf_k + rank_idx))
 
-        # Falls weder BM25 noch Dense Treffer hatten, nimm erlaubte Chunks als Fallback-Kandidaten
         if not rrf_scores:
             for rank_idx, cid in enumerate(list(allowed_chunk_ids)[: req.top_k_candidates], start=1):
                 rrf_scores[cid] = 1.0 / (rrf_k + rank_idx)
@@ -311,8 +274,15 @@ class HybridRetrievalEngine:
             : req.top_k_candidates
         ]
 
-        # 4. Cross-Encoder Reranking (BAAI/bge-reranker-v2-m3)
-        cross_inp = [[req.query, self.chunk_store[cid].text_for_indexing] for cid in fused_candidates]
+        # 4. Cross-Encoder Reranking auf SAUBEREM Text (Titel + text_raw statt Metadaten-Header!)
+        cross_inp = [
+            [
+                req.query,
+                f"{self.chunk_store[cid].metadata.title} ({self.chunk_store[cid].metadata.category}): "
+                f"{self.chunk_store[cid].text_raw}",
+            ]
+            for cid in fused_candidates
+        ]
         raw_logits = self.reranker.predict(cross_inp, show_progress_bar=False)
 
         scored_chunks: List[ScoredChunk] = []
@@ -324,19 +294,22 @@ class HybridRetrievalEngine:
 
             # Sigmoid-Normalisierung des Cross-Encoder Logits auf [0.0, 1.0]
             rerank_prob = 1.0 / (1.0 + math.exp(-float(logit)))
+            dense_sim = dense_sim_map.get(cid, 0.5)
 
-            # § 1 B & § 2 H b: Qualitäts-Boost für offizielle Quellen & Einfache/Leichte Sprache
+            # Kombinierter Relevanz-Score (70 % Cross-Encoder + 30 % BGE-M3 Cosine-Similarity)
+            # Verhindert extreme Ausreißer nach unten bei kurzen oder umgangssprachlichen Fragen
+            combined_base = (0.70 * rerank_prob) + (0.30 * dense_sim)
+
             boost = 0.0
             if meta.status == SourceStatus.OFFICIAL:
                 boost += 0.03
             if meta.language_level == LanguageLevel.EASY:
-                boost += 0.05  # § 2 H b: Bevorzugte Gewichtung Leichter Sprache
+                boost += 0.05
             elif meta.language_level == LanguageLevel.SIMPLE:
                 boost += 0.02
 
-            final_score = min(round(rerank_prob + boost, 4), 1.0)
+            final_score = min(round(combined_base + boost, 4), 1.0)
 
-            # § 10 B c: Automatische TTL-Prüfung & Warnhinweis-Generierung
             ttl_warning = None
             is_expired = meta.is_expired or (meta.valid_until is not None and meta.valid_until < today)
             if is_expired:
@@ -363,12 +336,10 @@ class HybridRetrievalEngine:
                 )
             )
 
-        # Sortiere absteigend nach final_score und schneide auf top_k_final zu
         scored_chunks.sort(key=lambda sc: sc.final_score, reverse=True)
         top_chunks = scored_chunks[: req.top_k_final]
         best_score = top_chunks[0].final_score if top_chunks else 0.0
 
-        # 5. Quellen-Guard (Schwellenwert-Prüfung laut UML-Sequenzdiagramm & FA-06)
         if best_score < req.score_threshold:
             logger.warning(
                 f"Quellen-Guard ausgelöst für Anfrage '{req.query}': "
@@ -384,7 +355,7 @@ class HybridRetrievalEngine:
                     "Quartiersdatenbank vor. Bitte wenden Sie sich direkt an die persönliche "
                     "AWO-Beratungsstelle oder das Quartiersbüro in Hildesheim."
                 ),
-                results=top_chunks,  # Für das Debug-UI geben wir die verworfenen Chunks trotzdem zur Ansicht mit
+                results=top_chunks,
             )
 
         return RetrievalResponse(
@@ -397,7 +368,6 @@ class HybridRetrievalEngine:
         )
 
     def _apply_metadata_filters(self, filters: Optional[RetrievalFilter]) -> set:
-        """Filtert die Chunk-IDs anhand der strukturierten Metadaten (FA-03, § 2 D, § 2 I)."""
         if not filters:
             return set(self.chunk_store.keys())
 

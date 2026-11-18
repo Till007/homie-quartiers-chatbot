@@ -1,15 +1,15 @@
 {
-  "allowed_domains": [
-    "hildesheim.de",
-    "landkreishildesheim.de",
-    "awo-hildesheim.de",
-    "awo-bs.de",
-    "caritas-hildesheim.de",
-    "diakonie-hildesheim.de",
-    "senioren-hildesheim.de",
-    "www.awo-hi.de",
-    "www.amazon.de",
-    "https://www.seniorenberatung-hannover.de/"
+  "blocked_domains": [
+    "facebook.com",
+    "instagram.com",
+    "tiktok.com",
+    "twitter.com",
+    "x.com",
+    "youtube.com",
+    "amazon.de",
+    "ebay.de",
+    "linkedin.com",
+    "pinterest.com"
   ],
   "blocked_url_patterns": [
     "/karriere",
@@ -18,9 +18,33 @@
     "/impressum",
     "/datenschutz",
     "/b2b",
-    "/presse",
     "/login",
-    "/warenkorb"
+    "/warenkorb",
+    "/checkout",
+    "/agb"
   ],
+  "trusted_official_domains": [
+    "hildesheim.de",
+    "landkreishildesheim.de",
+    "awo-hildesheim.de",
+    "awo-bs.de",
+    "awo.org",
+    "caritas-hildesheim.de",
+    "caritas.de",
+    "diakonie-hildesheim.de",
+    "diakonie.de",
+    "drk-hildesheim.de",
+    "eutb.de",
+    "niedersachsen.de"
+  ],
+  "relevance_keywords": [
+    "hildesheim", "quartier", "beratung", "pflege", "hilfe", "senioren", "familie",
+    "kinder", "jugend", "gesundheit", "arzt", "klinik", "therapie", "demenz",
+    "mobilität", "bus", "bahn", "öpnv", "barrierefrei", "rollstuhl", "freizeit",
+    "treff", "verein", "sport", "kultur", "begegnung", "awo", "caritas", "diakonie",
+    "sozial", "unterstützung", "antrag", "wohngeld", "bürgergeld", "nachbarschaft",
+    "sprechstunde", "öffnungszeiten", "angebot", "stadtteil"
+  ],
+  "min_relevance_hits": 2,
   "max_crawl_depth": 1
 }
