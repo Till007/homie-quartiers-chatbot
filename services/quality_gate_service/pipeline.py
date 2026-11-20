@@ -11,6 +11,7 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from langdetect import LangDetectException, detect
 
@@ -185,7 +186,14 @@ class QualityGatePipeline:
             "ministerium", "caritas", "diakonie", "drk", "eutb", "paritätisch", "universität", "land niedersachsen"
         ]
 
-        is_trusted_domain = any(str(domain) in source_path.lower() for domain in trusted_domains)
+        # Vergleich über die Domain der URL (wie im Crawler), nicht als Teilzeichenkette:
+        # sonst gilt z. B. https://example.org/hildesheim.de/x oder evilcaritas.de als offiziell.
+        netloc = urlparse(source_path).netloc.lower().split(":")[0]
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
+        is_trusted_domain = bool(netloc) and any(
+            netloc == str(d).lower() or netloc.endswith("." + str(d).lower()) for d in trusted_domains
+        )
         is_official_pub = bool(
             publisher and any(op in publisher.lower() for op in official_publishers)
         )
