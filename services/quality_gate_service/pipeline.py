@@ -11,6 +11,7 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from langdetect import LangDetectException, detect
 
@@ -185,7 +186,14 @@ class QualityGatePipeline:
             "ministerium", "caritas", "diakonie", "drk", "eutb", "paritätisch", "universität", "land niedersachsen"
         ]
 
-        is_trusted_domain = any(str(domain) in source_path.lower() for domain in trusted_domains)
+        # Vergleich über die Domain der URL (wie im Crawler), nicht als Teilzeichenkette:
+        # sonst gilt z. B. https://example.org/hildesheim.de/x oder evilcaritas.de als offiziell.
+        netloc = urlparse(source_path).netloc.lower().split(":")[0]
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
+        is_trusted_domain = bool(netloc) and any(
+            netloc == str(d).lower() or netloc.endswith("." + str(d).lower()) for d in trusted_domains
+        )
         is_official_pub = bool(
             publisher and any(op in publisher.lower() for op in official_publishers)
         )
@@ -357,23 +365,34 @@ class QualityGatePipeline:
         )
 
     def _check_discriminatory_language(self, text: str) -> Tuple[str, RuleEvaluationResult]:
+        """
+        § 2 E a: Ressourcenorientierung statt Defizitorientierung.
+        Der Quelltext wird NICHT automatisch verändert. Die frühere Ersetzung als Teilzeichenkette
+        (ohne Wortgrenzen, ohne Groß-/Kleinschreibung) hat Wörter zerstört, z. B.
+        „Im Notfall rufen Sie die 112 an“ -> „Im NotBeratungsfall oder Unterstützungsanliegen ...“,
+        „Haltestelle“ -> „Hältere Menschenstelle“, „Ausländerbehörde“ -> „Menschen ohne deutsche
+        Staatsangehörigkeitbehörde“. Das widerspricht der Quellentreue (K2) und kann Notfallhinweise
+        unlesbar machen. Funde werden als ganze Wörter erkannt und zur redaktionellen Prüfung gemeldet
+        (§ 2 E a: „müssen redaktionell überarbeitet werden“). Eine Umformulierung gehört in die
+        Antwort (Prompt-Glossar bzw. Post-Generation-Filter), nicht in die Quelle.
+        """
         updated_text = text
-        replaced_terms: List[str] = []
+        found_terms: List[str] = []
 
         for bad_term, neutral_term in self.discriminatory_terms.items():
-            pattern = re.compile(re.escape(bad_term), re.IGNORECASE)
-            if pattern.search(updated_text):
-                updated_text = pattern.sub(str(neutral_term), updated_text)
-                replaced_terms.append(f"'{bad_term}' -> '{neutral_term}'")
+            pattern = re.compile(r"(?<!\w)" + re.escape(bad_term) + r"(?!\w)")
+            n_hits = len(pattern.findall(text))
+            if n_hits:
+                found_terms.append(f"'{bad_term}' ({n_hits}x, Vorschlag: '{neutral_term}')")
 
-        if replaced_terms:
+        if found_terms:
             return updated_text, RuleEvaluationResult(
                 rule_id="§ 2 E a",
                 rule_name="Kultursensible & diskriminierungsfreie Sprache",
                 status=RuleCheckStatus.WARNING,
-                score_or_metric=float(len(replaced_terms)),
-                details=f"Defizitorientierte Begriffe automatisch ersetzt: {', '.join(replaced_terms)}",
-                auto_fixed=True,
+                score_or_metric=float(len(found_terms)),
+                details=f"Defizitorientierte Begriffe gefunden, bitte redaktionell prüfen: {', '.join(found_terms)}",
+                auto_fixed=False,
             )
 
         return updated_text, RuleEvaluationResult(

@@ -166,6 +166,12 @@ async def _synthesize_with_edge_tts(
     Mehrsprachige neurale Sprachausgabe (unterstützt fließendes Arabisch, Türkisch, Ukrainisch,
     Russisch, Englisch und Deutsch), falls Piper unter Windows ausfällt.
     """
+    # edge-tts ist kein lokales Modell: Der Text wird an den Onlinedienst von Microsoft gesendet.
+    # Das widerspricht K1 (keine Nutzerdaten an Dritte, Offline-Test) und dem Offline-Betrieb auf dem
+    # Roboter. Deshalb nur nach ausdrücklicher Freigabe (z. B. für Demos): ALLOW_CLOUD_TTS=true
+    if os.getenv("ALLOW_CLOUD_TTS", "false").strip().lower() not in ("1", "true", "yes"):
+        logger.info("Cloud-TTS (edge-tts) deaktiviert (ALLOW_CLOUD_TTS ist nicht gesetzt); nutze lokale Fallbacks.")
+        return False
     try:
         import edge_tts
 

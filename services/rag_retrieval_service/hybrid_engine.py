@@ -7,13 +7,13 @@ Implementiert den vollständigen Hybrid-Retriever gemäß HOMIE-Architektur:
 - Reranking: Cross-Encoder (BAAI/bge-reranker-v2-m3) auf sauberem Text (Titel + text_raw) + Dense-Kalibrierung
 """
 
+import json
 import math
 import os
-import pickle
 import re
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import chromadb
 from chromadb.config import Settings
@@ -35,7 +35,10 @@ logger = get_service_logger("rag-hybrid-engine")
 
 BUNDLE_DIR = Path(os.getenv("PRODUCTION_BUNDLE_DIR", "data/production_bundle"))
 CHROMA_DIR = BUNDLE_DIR / "chroma_db"
-BM25_FILE = BUNDLE_DIR / "bm25_store.pkl"
+BM25_FILE = BUNDLE_DIR / "bm25_store.json"
+# Früheres Format (pickle). Wird nicht mehr geladen: pickle.load kann beim Laden beliebigen Code ausführen,
+# und das Bündel wird per USB/OTA auf den Roboter verteilt (§ 11 C b). Nach dem Update einmal neu synchronisieren.
+LEGACY_BM25_PICKLE = BUNDLE_DIR / "bm25_store.pkl"
 MODELS_CACHE_DIR = Path(os.getenv("MODELS_CACHE_DIR", "data/models_cache"))
 
 for directory in (BUNDLE_DIR, CHROMA_DIR, MODELS_CACHE_DIR):
@@ -66,11 +69,7 @@ class HybridRetrievalEngine:
         )
 
         logger.info(f"Lade Cross-Encoder Reranker '{RERANKER_MODEL_NAME}' auf CPU...")
-        self.reranker = CrossEncoder(
-            RERANKER_MODEL_NAME,
-            device="cpu",
-            max_length=512,
-        )
+        self.reranker, self._reranker_returns_logits = self._load_reranker(RERANKER_MODEL_NAME)
 
         self.chunk_store: Dict[str, DocumentChunk] = {}
         self.bm25_ids: List[str] = []
@@ -80,6 +79,29 @@ class HybridRetrievalEngine:
         logger.info(
             f"HybridRetrievalEngine bereit. Aktuell indexierte Chunks: {len(self.chunk_store)}"
         )
+
+    @staticmethod
+    def _load_reranker(model_name: str) -> Tuple[CrossEncoder, bool]:
+        """
+        Lädt den Cross-Encoder so, dass predict() rohe Logits liefert.
+        Hintergrund: sentence-transformers wendet bei Modellen mit einem Label standardmäßig schon
+        eine Sigmoid-Funktion an. Die zweite Sigmoid-Funktion in retrieve() hat jeden Wert in den
+        Bereich 0,5 bis 0,73 geschoben; mit 0,7 * rerank + 0,3 * dense lag der Score damit immer
+        über 0,35, und der Quellen-Guard (Schwelle 0,25) hat nie ausgelöst.
+        Rückgabe: (Modell, True wenn predict() Logits liefert).
+        """
+        import torch
+
+        for kwarg in ("activation_fn", "default_activation_function"):  # Name je nach Bibliotheksversion
+            try:
+                model = CrossEncoder(
+                    model_name, device="cpu", max_length=512, **{kwarg: torch.nn.Identity()}
+                )
+                return model, True
+            except TypeError:
+                continue
+        logger.warning("Cross-Encoder ohne Identity-Aktivierung geladen; Scores gelten als Wahrscheinlichkeiten.")
+        return CrossEncoder(model_name, device="cpu", max_length=512), False
 
     def _tokenize_for_bm25(self, text: str) -> List[str]:
         cleaned = re.sub(r"[^\w\säöüßÄÖÜçğıöşüÇĞİÖŞÜ]", " ", text.lower())
@@ -101,17 +123,22 @@ class HybridRetrievalEngine:
             serializable_data = {
                 cid: chunk.model_dump(mode="json") for cid, chunk in self.chunk_store.items()
             }
-            with open(BM25_FILE, "wb") as f:
-                pickle.dump(serializable_data, f)
+            with open(BM25_FILE, "w", encoding="utf-8") as f:
+                json.dump(serializable_data, f, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Fehler beim Speichern des BM25-Stores: {e}", exc_info=True)
 
     def _load_bm25_store(self) -> None:
         if not BM25_FILE.exists():
+            if LEGACY_BM25_PICKLE.exists():
+                logger.warning(
+                    f"Alter BM25-Store {LEGACY_BM25_PICKLE.name} gefunden, wird aus Sicherheitsgründen nicht geladen. "
+                    "Bitte einmal /api/v1/rag/sync-from-etl ausführen."
+                )
             return
         try:
-            with open(BM25_FILE, "rb") as f:
-                raw_data: Dict[str, dict] = pickle.load(f)
+            with open(BM25_FILE, "r", encoding="utf-8") as f:
+                raw_data: Dict[str, dict] = json.load(f)
             self.chunk_store = {
                 cid: DocumentChunk.model_validate(c_dict) for cid, c_dict in raw_data.items()
             }
@@ -286,19 +313,24 @@ class HybridRetrievalEngine:
         raw_logits = self.reranker.predict(cross_inp, show_progress_bar=False)
 
         scored_chunks: List[ScoredChunk] = []
+        guard_scores: Dict[str, float] = {}  # Relevanz ohne Qualitäts-Boni, nur für den Quellen-Guard
         today = date.today()
 
         for cid, logit in zip(fused_candidates, raw_logits):
             chunk = self.chunk_store[cid]
             meta = chunk.metadata
 
-            # Sigmoid-Normalisierung des Cross-Encoder Logits auf [0.0, 1.0]
-            rerank_prob = 1.0 / (1.0 + math.exp(-float(logit)))
+            # Normalisierung auf [0.0, 1.0]: genau eine Sigmoid-Funktion, und nur wenn predict() Logits liefert
+            if self._reranker_returns_logits:
+                rerank_prob = 1.0 / (1.0 + math.exp(-float(logit)))
+            else:
+                rerank_prob = min(max(float(logit), 0.0), 1.0)
             dense_sim = dense_sim_map.get(cid, 0.5)
 
             # Kombinierter Relevanz-Score (70 % Cross-Encoder + 30 % BGE-M3 Cosine-Similarity)
             # Verhindert extreme Ausreißer nach unten bei kurzen oder umgangssprachlichen Fragen
             combined_base = (0.70 * rerank_prob) + (0.30 * dense_sim)
+            guard_scores[cid] = combined_base
 
             boost = 0.0
             if meta.status == SourceStatus.OFFICIAL:
@@ -338,11 +370,13 @@ class HybridRetrievalEngine:
 
         scored_chunks.sort(key=lambda sc: sc.final_score, reverse=True)
         top_chunks = scored_chunks[: req.top_k_final]
-        best_score = top_chunks[0].final_score if top_chunks else 0.0
+        # Der Quellen-Guard prüft die Relevanz OHNE die Qualitäts-Boni (offiziell, Leichte Sprache).
+        # Die Boni ändern nur die Reihenfolge; sie dürfen keine unpassende Quelle über die Schwelle heben.
+        best_score = round(max((guard_scores[sc.chunk.chunk_id] for sc in top_chunks), default=0.0), 4)
 
         if best_score < req.score_threshold:
             logger.warning(
-                f"Quellen-Guard ausgelöst für Anfrage '{req.query}': "
+                f"Quellen-Guard ausgelöst (Anfrage mit {len(req.query)} Zeichen, Inhalt wird nicht protokolliert): "
                 f"Bester Score ({best_score:.3f}) < Schwellenwert ({req.score_threshold:.3f})."
             )
             return RetrievalResponse(
