@@ -7,9 +7,9 @@ Implementiert den vollständigen Hybrid-Retriever gemäß HOMIE-Architektur:
 - Reranking: Cross-Encoder (BAAI/bge-reranker-v2-m3) auf sauberem Text (Titel + text_raw) + Dense-Kalibrierung
 """
 
+import json
 import math
 import os
-import pickle
 import re
 from datetime import date
 from pathlib import Path
@@ -35,7 +35,10 @@ logger = get_service_logger("rag-hybrid-engine")
 
 BUNDLE_DIR = Path(os.getenv("PRODUCTION_BUNDLE_DIR", "data/production_bundle"))
 CHROMA_DIR = BUNDLE_DIR / "chroma_db"
-BM25_FILE = BUNDLE_DIR / "bm25_store.pkl"
+BM25_FILE = BUNDLE_DIR / "bm25_store.json"
+# Früheres Format (pickle). Wird nicht mehr geladen: pickle.load kann beim Laden beliebigen Code ausführen,
+# und das Bündel wird per USB/OTA auf den Roboter verteilt (§ 11 C b). Nach dem Update einmal neu synchronisieren.
+LEGACY_BM25_PICKLE = BUNDLE_DIR / "bm25_store.pkl"
 MODELS_CACHE_DIR = Path(os.getenv("MODELS_CACHE_DIR", "data/models_cache"))
 
 for directory in (BUNDLE_DIR, CHROMA_DIR, MODELS_CACHE_DIR):
@@ -120,17 +123,22 @@ class HybridRetrievalEngine:
             serializable_data = {
                 cid: chunk.model_dump(mode="json") for cid, chunk in self.chunk_store.items()
             }
-            with open(BM25_FILE, "wb") as f:
-                pickle.dump(serializable_data, f)
+            with open(BM25_FILE, "w", encoding="utf-8") as f:
+                json.dump(serializable_data, f, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Fehler beim Speichern des BM25-Stores: {e}", exc_info=True)
 
     def _load_bm25_store(self) -> None:
         if not BM25_FILE.exists():
+            if LEGACY_BM25_PICKLE.exists():
+                logger.warning(
+                    f"Alter BM25-Store {LEGACY_BM25_PICKLE.name} gefunden, wird aus Sicherheitsgründen nicht geladen. "
+                    "Bitte einmal /api/v1/rag/sync-from-etl ausführen."
+                )
             return
         try:
-            with open(BM25_FILE, "rb") as f:
-                raw_data: Dict[str, dict] = pickle.load(f)
+            with open(BM25_FILE, "r", encoding="utf-8") as f:
+                raw_data: Dict[str, dict] = json.load(f)
             self.chunk_store = {
                 cid: DocumentChunk.model_validate(c_dict) for cid, c_dict in raw_data.items()
             }
