@@ -1,8 +1,7 @@
 """
 services/etl_ingest_service/main.py
 FastAPI-Microservice für ETL (Extract, Transform, Load-Vorbereitung) auf Port 8002.
-Neu: Herausgeber (publisher) und Ablaufdatum (valid_until) werden automatisch ermittelt,
-wenn sie bei Datei-Upload oder URL-Scraping leer gelassen werden.
+Neu: Unterstützt den Massen-Upload (Batch-Processing) mehrerer PDFs/TXTs gleichzeitig.
 """
 
 import json
@@ -38,8 +37,8 @@ for d in (RAW_INBOX_DIR, QUARANTINE_DIR, PROCESSED_CHUNKS_DIR):
 
 app = FastAPI(
     title="HOMIE ETL-Ingest Microservice",
-    description="Liest PDFs/TXT & Webseiten, ermittelt Metadaten automatisch, prüft über das Quality-Gate (Port 8001) und erzeugt Chunks.",
-    version="1.1.0",
+    description="Liest PDFs/TXT & Webseiten (auch im Batch), prüft über das Quality-Gate (Port 8001) und erzeugt Chunks.",
+    version="1.3.0",
 )
 
 extractor = DocumentExtractor()
@@ -150,9 +149,9 @@ async def health_check():
 @app.post("/api/v1/etl/ingest-file", response_model=ETLProcessResponse)
 async def ingest_file_endpoint(
     file: UploadFile = File(..., description="PDF- oder TXT-Datei"),
-    publisher: Optional[str] = Form(default=None, description="Optional: Wird bei leerem Feld automatisch ermittelt"),
-    valid_until: Optional[date] = Form(default=None, description="Optional: Wird bei leerem Feld automatisch ermittelt"),
-    use_llm_enrichment: bool = Form(default=True),
+    publisher: Optional[str] = Form(default=None, description="Optional"),
+    valid_until: Optional[date] = Form(default=None, description="Optional"),
+    use_llm_enrichment: bool = Form(default=False),
 ) -> ETLProcessResponse:
     safe_filename = Path(file.filename or "upload.txt").name
     saved_path = RAW_INBOX_DIR / safe_filename
@@ -181,6 +180,54 @@ async def ingest_file_endpoint(
         raise HTTPException(status_code=400, detail=f"Fehler bei der Dateiverarbeitung: {str(e)}")
 
 
+@app.post("/api/v1/etl/ingest-batch", response_model=List[ETLProcessResponse])
+async def ingest_batch_endpoint(
+    files: List[UploadFile] = File(..., description="Mehrere PDF- oder TXT-Dateien für den Massen-Upload"),
+    use_llm_enrichment: bool = Form(default=False),
+) -> List[ETLProcessResponse]:
+    """Massen-Upload: Verarbeitet eine Liste von Dateien nacheinander in einer Schleife."""
+    responses: List[ETLProcessResponse] = []
+    for file_obj in files:
+        safe_filename = Path(file_obj.filename or "upload.txt").name
+        saved_path = RAW_INBOX_DIR / safe_filename
+        try:
+            with open(saved_path, "wb") as buffer:
+                shutil.copyfileobj(file_obj.file, buffer)
+
+            raw_text, doc_date, title, auto_pub, auto_valid = extractor.extract_from_file(saved_path)
+            res = await _run_quality_gate_and_transform(
+                raw_text=raw_text,
+                title=title,
+                source_path_or_url=str(saved_path),
+                publisher=auto_pub,
+                doc_date=doc_date,
+                valid_until=auto_valid,
+                use_llm_enrichment=use_llm_enrichment,
+            )
+            responses.append(res)
+        except Exception as e:
+            logger.error(f"Batch-Fehler bei Datei {safe_filename}: {e}")
+            # Erstelle einen Dummy-Fehler-Response für fehlerhafte Dateien
+            # Erstelle einen Dummy-Fehler-Response für fehlerhafte Dateien
+            from shared.schemas import DocumentMetadata, QualityAuditReport, SourceStatus
+            dummy_meta = DocumentMetadata(
+                doc_id="DOC-ERROR",
+                title=safe_filename,
+                source_url_or_path=str(saved_path),  # Korrigiert von source_path_or_path
+                content_hash_sha256="error",
+            )
+            dummy_report = QualityAuditReport(
+                audit_id="ERR", approved_for_ingestion=False, sanitized_text="",
+                extracted_metadata=dummy_meta, blocking_reasons=[str(e)]
+            )
+            responses.append(
+                ETLProcessResponse(
+                    success=False, status_message=f"Fehler: {e}", audit_report=dummy_report, chunks=[]
+                )
+            )
+    return responses
+
+
 @app.post("/api/v1/etl/ingest-url", response_model=ETLProcessResponse)
 async def ingest_url_endpoint(req: ScrapeUrlRequest) -> ETLProcessResponse:
     try:
@@ -193,8 +240,7 @@ async def ingest_url_endpoint(req: ScrapeUrlRequest) -> ETLProcessResponse:
             if (user_pub and user_pub != "Webquelle Hildesheim")
             else auto_pub
         )
-        # Optionales valid_until unterstützen, falls im Request-Schema oder automatisch erkannt
-        req_valid = getattr(req, "valid_until", None) or auto_valid
+        req_valid = req.valid_until or auto_valid
 
         return await _run_quality_gate_and_transform(
             raw_text=scraped_text,

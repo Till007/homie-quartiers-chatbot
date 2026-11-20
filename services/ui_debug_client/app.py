@@ -1,11 +1,9 @@
 """
 services/ui_debug_client/app.py
-Interaktive Gradio-Benutzeroberfläche für Debugging, Governance (Quality-Gate/ETL)
-und Kiosk-/Roboter-Simulation (Port 7860).
-Neu:
-- Aufgeräumte Oberfläche: Keine langen Erklärungstexte mehr unter den Bedienelementen!
-- Klickbares 'ℹ️'-Symbol bei jeder Funktion, das ein schwebendes Popup-Fenster darüber öffnet.
-- Unterstützt mehrsprachige Audio-Ausgabe (.wav & .mp3) für Deutsch, Arabisch, Türkisch, Ukrainisch, Russisch & Englisch.
+Interaktive Gradio-Benutzeroberfläche mit:
+- Klickbaren 'ℹ️'-Info-Popups
+- Massen-Upload (Batch-Processing für mehrere PDFs gleichzeitig)
+- Wissensbasis-Inventar-Tabelle (Übersicht aller indexierten Dokumente)
 """
 
 import json
@@ -29,7 +27,8 @@ RAG_URL = "http://127.0.0.1:8003"
 ORCHESTRATOR_URL = "http://127.0.0.1:8004"
 SPEECH_URL = "http://127.0.0.1:8005"
 
-# CSS für SA-05 Großschrift + Klickbares ℹ️-Popup-Fenster (schwebt beim Klick über dem Element)
+PROCESSED_CHUNKS_DIR = Path("data/processed_chunks")
+
 CUSTOM_CSS = """
 .kiosk-chat p, .kiosk-chat li {
     font-size: 20px !important;
@@ -95,10 +94,6 @@ details.info-pop .info-pop-box {
 
 
 def info_label(title: str, popup_html: str) -> gr.HTML:
-    """
-    Erzeugt eine kompakte Titelzeile mit einem anklickbaren 'i'-Symbol.
-    Beim Klick auf 'i' öffnet sich ein kleines schwebendes Fenster darüber.
-    """
     return gr.HTML(
         f"""
         <div class="info-bar">
@@ -155,7 +150,7 @@ def _create_kiosk_chatbot() -> gr.Chatbot:
 
 
 # =====================================================================
-# TAB 1 LOGIK: CHAT, AUDIO (STT/TTS) & PARADIGMEN-VERGLEICH
+# TAB 1 LOGIK
 # =====================================================================
 
 def transcribe_mic_input(audio_filepath: Optional[str]) -> Tuple[str, str, str]:
@@ -229,17 +224,12 @@ def handle_chat_turn(
     chat_history = _append_to_chat_history(chat_history, user_message, answer_text)
 
     trace_lines = [
-        f"⏱️ Gesamt-Latenz: {data.get('total_latency_ms')} ms | "
-        f"Paradigma: {data.get('paradigm_used')} | "
-        f"Quellen-Guard bestanden: {data.get('passed_source_guard')} | "
-        f"Sensibles Thema (SA-06): {data.get('is_sensitive_topic')}",
-        f"🔍 Deutsche Suchanfrage (Query-Rewriter/Brücke): '{data.get('rewritten_query')}'",
+        f"⏱️ Latenz: {data.get('total_latency_ms')} ms | Paradigma: {data.get('paradigm_used')} | Guard bestanden: {data.get('passed_source_guard')}",
+        f"🔍 Suchanfrage: '{data.get('rewritten_query')}'",
         "-" * 70,
     ]
     for idx, step in enumerate(data.get("agent_trace", []), start=1):
-        trace_lines.append(
-            f"[{idx}] {step.get('step_name')} ({step.get('duration_ms')} ms):\n    {step.get('details')}"
-        )
+        trace_lines.append(f"[{idx}] {step.get('step_name')} ({step.get('duration_ms')} ms):\n    {step.get('details')}")
 
     tts_audio_path = None
     if enable_tts and answer_text:
@@ -260,48 +250,25 @@ def handle_chat_turn(
                     out_audio = audio_dir / f"ui_response_{int(time.time() * 1000)}{ext}"
                     out_audio.write_bytes(tts_resp.content)
                     tts_audio_path = str(out_audio.resolve())
-                    trace_lines.append(f"🔊 Sprachausgabe (TTS) erfolgreich generiert: {out_audio.name}")
-                else:
-                    trace_lines.append(f"⚠️ TTS-Warnung: HTTP {tts_resp.status_code}")
         except Exception as e:
             logger.warning(f"TTS-Wiedergabe im UI fehlgeschlagen: {e}")
-            trace_lines.append(f"⚠️ TTS-Fehler (Port 8005 prüfen): {e}")
 
     trace_output = "\n".join(trace_lines)
-    german_inter = data.get("german_intermediate_text") or (
-        "(Kein separater Zwischentext, da V2a direkt gewählt wurde)"
-    )
+    german_inter = data.get("german_intermediate_text") or "(Kein Zwischentext)"
 
     source_rows = []
     for sc in data.get("sources", []):
         ch = sc.get("chunk", {})
         meta = ch.get("metadata", {})
-        source_rows.append(
-            [
-                ch.get("chunk_id"),
-                meta.get("title"),
-                meta.get("district"),
-                sc.get("dense_rank"),
-                sc.get("bm25_rank"),
-                sc.get("rrf_score"),
-                sc.get("reranker_score"),
-                sc.get("final_score"),
-                ",".join(meta.get("service_languages", [])),
-            ]
-        )
+        source_rows.append([
+            ch.get("chunk_id"), meta.get("title"), meta.get("district"),
+            sc.get("dense_rank"), sc.get("bm25_rank"), sc.get("rrf_score"),
+            sc.get("reranker_score"), sc.get("final_score"), ",".join(meta.get("service_languages", []))
+        ])
 
     qr_img = generate_qr_image(data.get("qr_code_payload"))
-    robot_badge = f"🗣️ ROBO-STATE: {data.get('robot_state', 'speaking').upper()} (Danach Auto-Idle)"
-    return (
-        chat_history,
-        "",
-        trace_output,
-        german_inter,
-        source_rows,
-        qr_img,
-        tts_audio_path,
-        robot_badge,
-    )
+    robot_badge = f"🗣️ ROBO-STATE: {data.get('robot_state', 'speaking').upper()} (Auto-Idle)"
+    return chat_history, "", trace_output, german_inter, source_rows, qr_img, tts_audio_path, robot_badge
 
 
 def reset_kiosk_session(session_id: str) -> Tuple[List, str, str]:
@@ -314,35 +281,98 @@ def reset_kiosk_session(session_id: str) -> Tuple[List, str, str]:
 
 
 # =====================================================================
-# TAB 2 LOGIK: ETL-INGEST & QUALITY-GATE GOVERNANCE (§ 1 - § 11)
+# TAB 2 LOGIK: ETL-INGEST, BATCH & INVENTAR-TABELLE
 # =====================================================================
 
-def sync_etl_to_chromadb() -> str:
+def sync_etl_to_chromadb() -> Tuple[str, List[List[Any]]]:
+    """Synchronisiert das Vorzimmer und gibt die aktuelle Inventar-Tabelle zurück."""
     try:
         with httpx.Client(timeout=300.0) as client:
             resp = client.post(f"{RAG_URL}/api/v1/rag/sync-from-etl")
             resp.raise_for_status()
             data = resp.json()
-        return (
-            f"✅ Delta-Synchronisation erfolgreich! "
-            f"Neu indexierte Dokumente: {data.get('synced_files')} | "
-            f"Übersprungene (bereits vorhandene) Dokumente: {data.get('skipped_unchanged_files', 0)} | "
-            f"Gesamtanzahl Chunks in ChromaDB + BM25: {data.get('total_indexed_chunks')}"
+        sync_msg = (
+            f"✅ Delta-Sync erfolgreich! "
+            f"Neu: {data.get('synced_files')} | "
+            f"Übersprungen: {data.get('skipped_unchanged_files', 0)} | "
+            f"Gesamt-Chunks: {data.get('total_indexed_chunks')}"
         )
     except Exception as e:
-        return f"❌ Fehler bei der Index-Synchronisation (Port 8003 prüfen): {e}"
+        sync_msg = f"❌ Fehler bei der Synchronisation: {e}"
+
+    return sync_msg, load_knowledge_base_inventory()
+
+
+def load_knowledge_base_inventory() -> List[List[Any]]:
+    """Liest alle verarbeiteten JSON-Dokumente aus data/processed_chunks/ für die Inventar-Tabelle aus."""
+    rows = []
+    if not PROCESSED_CHUNKS_DIR.exists():
+        return rows
+
+    for json_file in PROCESSED_CHUNKS_DIR.glob("*.json"):
+        try:
+            raw_list = json.loads(json_file.read_text(encoding="utf-8"))
+            if not raw_list or not isinstance(raw_list, list):
+                continue
+            first_chunk = raw_list[0]
+            meta = first_chunk.get("metadata", {})
+            rows.append([
+                meta.get("doc_id", "Unbekannt"),
+                meta.get("title", json_file.stem),
+                meta.get("publisher", "Unbekannt"),
+                meta.get("category", "Allgemein"),
+                meta.get("district", "Gesamt"),
+                len(raw_list), # Anzahl Chunks
+                meta.get("valid_until", "Unbefristet"),
+                meta.get("status", "unofficial"),
+            ])
+        except Exception:
+            continue
+    return rows
 
 
 def run_file_ingest_and_audit(
-    file_obj: Any, publisher: str, valid_until_str: str, use_llm: bool, auto_sync: bool
-) -> Tuple[str, List[List[Any]], str, str, str]:
-    if file_obj is None:
-        return "Bitte zuerst eine PDF- oder TXT-Datei auswählen.", [], "{}", "", ""
+    file_objs: Any, publisher: str, valid_until_str: str, use_llm: bool, auto_sync: bool
+) -> Tuple[str, List[List[Any]], str, str, str, List[List[Any]]]:
+    """Unterstützt sowohl Einzel-Upload als auch Massen-Upload (Batch) mehrerer Dateien."""
+    if not file_objs:
+        return "Bitte mindestens eine PDF- oder TXT-Datei auswählen.", [], "{}", "", "", load_knowledge_base_inventory()
 
-    filepath = Path(file_obj.name)
-    data_form: Dict[str, Any] = {
-        "use_llm_enrichment": str(use_llm).lower(),
-    }
+    # Wenn mehrere Dateien hochgeladen wurden (Batch)
+    files_list = file_objs if isinstance(file_objs, list) else [file_objs]
+    
+    if len(files_list) > 1:
+        summary_lines = []
+        all_rules = []
+        try:
+            with httpx.Client(timeout=600.0) as client:
+                multipart_files = [("files", (Path(f.name).name, open(f.name, "rb"), "application/pdf")) for f in files_list]
+                data = {"use_llm_enrichment": str(use_llm).lower()}
+                resp = client.post(f"{ETL_URL}/api/v1/etl/ingest-batch", data=data, files=multipart_files)
+                resp.raise_for_status()
+                results = resp.json()
+
+            for res in results:
+                audit = res.get("audit_report", {})
+                title = audit.get("extracted_metadata", {}).get("title", "Dokument")
+                appr = audit.get("approved_for_ingestion", False)
+                status_ico = "✅" if appr else "🚫"
+                summary_lines.append(f"{status_ico} {title}: {res.get('status_message')}")
+                for r in audit.get("rule_results", []):
+                    all_rules.append([r.get("rule_id"), r.get("rule_name"), r.get("status"), r.get("score_or_metric"), r.get("auto_fixed"), r.get("details")])
+
+            sync_msg = ""
+            if auto_sync:
+                sync_msg, _ = sync_etl_to_chromadb()
+
+            return "\n".join(summary_lines), all_rules, "{\"batch_upload\": true}", f"Batch verarbeitet: {len(files_list)} Dateien.", sync_msg, load_knowledge_base_inventory()
+        except Exception as e:
+            return f"❌ Fehler beim Massen-Upload: {e}", [], "{}", "", "", load_knowledge_base_inventory()
+
+    # Einzel-Upload
+    single_file = files_list[0]
+    filepath = Path(single_file.name)
+    data_form: Dict[str, Any] = {"use_llm_enrichment": str(use_llm).lower()}
     if publisher and publisher.strip():
         data_form["publisher"] = publisher.strip()
     if valid_until_str and valid_until_str.strip():
@@ -358,17 +388,17 @@ def run_file_ingest_and_audit(
         summary, rule_rows, meta_json, chunks_preview = _format_etl_response_for_ui(res)
         sync_msg = ""
         if auto_sync and res.get("success"):
-            sync_msg = sync_etl_to_chromadb()
-        return summary, rule_rows, meta_json, chunks_preview, sync_msg
+            sync_msg, _ = sync_etl_to_chromadb()
+        return summary, rule_rows, meta_json, chunks_preview, sync_msg, load_knowledge_base_inventory()
     except Exception as e:
-        return f"❌ Fehler beim Datei-Ingest: {e}", [], "{}", "", ""
+        return f"❌ Fehler beim Datei-Ingest: {e}", [], "{}", "", "", load_knowledge_base_inventory()
 
 
 def run_url_scrape_and_audit(
     url: str, publisher: str, valid_until_str: str, follow_depth_1: bool, use_llm: bool, auto_sync: bool
-) -> Tuple[str, List[List[Any]], str, str, str]:
+) -> Tuple[str, List[List[Any]], str, str, str, List[List[Any]]]:
     if not url or not url.strip():
-        return "Bitte eine gültige URL eingeben.", [], "{}", "", ""
+        return "Bitte eine gültige URL eingeben.", [], "{}", "", "", load_knowledge_base_inventory()
 
     payload: Dict[str, Any] = {
         "url": url.strip(),
@@ -381,22 +411,22 @@ def run_url_scrape_and_audit(
         with httpx.Client(timeout=300.0) as client:
             resp = client.post(f"{ETL_URL}/api/v1/etl/ingest-url", json=payload)
             if resp.status_code != 200:
-                return f"❌ Scraper/Regelwerk-Ablehnung ({resp.status_code}): {resp.text}", [], "{}", "", ""
+                return f"❌ Ablehnung ({resp.status_code}): {resp.text}", [], "{}", "", "", load_knowledge_base_inventory()
             res = resp.json()
         summary, rule_rows, meta_json, chunks_preview = _format_etl_response_for_ui(res)
         sync_msg = ""
         if auto_sync and res.get("success"):
-            sync_msg = sync_etl_to_chromadb()
-        return summary, rule_rows, meta_json, chunks_preview, sync_msg
+            sync_msg, _ = sync_etl_to_chromadb()
+        return summary, rule_rows, meta_json, chunks_preview, sync_msg, load_knowledge_base_inventory()
     except Exception as e:
-        return f"❌ Fehler beim Web-Scraping: {e}", [], "{}", "", ""
+        return f"❌ Fehler beim Web-Scraping: {e}", [], "{}", "", "", load_knowledge_base_inventory()
 
 
 def _format_etl_response_for_ui(res: Dict[str, Any]) -> Tuple[str, List[List[Any]], str, str]:
     audit = res.get("audit_report", {})
     meta = audit.get("extracted_metadata", {})
     approved = audit.get("approved_for_ingestion", False)
-    badge = "✅ FREIGEGEBEN DURCH QUALITY-GATE" if approved else "🚫 BLOCKIERT (IN QUARANTÄNE VERSCHOBEN)"
+    badge = "✅ FREIGEGEBEN DURCH QUALITY-GATE" if approved else "🚫 BLOCKIERT (IN QUARANTÄNE)"
     summary = (
         f"{badge} | Audit-ID: {audit.get('audit_id')}\n"
         f"Erkannter Herausgeber: {meta.get('publisher')} | Gültig bis (TTL): {meta.get('valid_until')}\n"
@@ -405,16 +435,10 @@ def _format_etl_response_for_ui(res: Dict[str, Any]) -> Tuple[str, List[List[Any
 
     rule_rows = []
     for r in audit.get("rule_results", []):
-        rule_rows.append(
-            [
-                r.get("rule_id"),
-                r.get("rule_name"),
-                r.get("status"),
-                r.get("score_or_metric"),
-                r.get("auto_fixed"),
-                r.get("details"),
-            ]
-        )
+        rule_rows.append([
+            r.get("rule_id"), r.get("rule_name"), r.get("status"),
+            r.get("score_or_metric"), r.get("auto_fixed"), r.get("details")
+        ])
 
     meta_json = json.dumps(meta, indent=2, ensure_ascii=False)
     chunks_preview = "\n\n====================\n\n".join(
@@ -448,18 +472,18 @@ def check_all_microservices_health() -> str:
 
 
 # =====================================================================
-# GRADIO UI AUFBAU MIT KOMPAKTEN KLICKBAREN 'i'-POPUPS
+# GRADIO UI AUFBAU MIT INVENTAR-TABELLE & MASSEN-UPLOAD
 # =====================================================================
 
 with gr.Blocks(title="HOMIE - Quartiers-Chatbot & Debug-Steuerzentrale", css=CUSTOM_CSS) as demo:
     gr.Markdown(
         "# 🤖 HOMIE – Quartiers-Chatbot Hildesheim (Development- & Evaluations-Zentrale)\n"
-        "**IT-Studienprojekt (IT-MA5) | HULLS Use-Case 1:** Klicke bei jeder Einstellung auf das blaue **`i`**, um eine Erklärung in einem kleinen Popup-Fenster zu öffnen."
+        "**IT-Studienprojekt (IT-MA5) | HULLS Use-Case 1:** Klicke bei jeder Einstellung auf das blaue **`i`**, um eine Erklärung im Popup zu öffnen."
     )
 
     with gr.Tabs():
         # -------------------------------------------------------------
-        # TAB 1: KIOSK-SIMULATION & PARADIGMEN-EVALUATION
+        # TAB 1: KIOSK-SIMULATION & PARADIGMEN-VERGLEICH
         # -------------------------------------------------------------
         with gr.TabItem("💬 1. Kiosk-Terminal & Paradigmen-Vergleich (TA-04)"):
             with gr.Row():
@@ -469,43 +493,23 @@ with gr.Blocks(title="HOMIE - Quartiers-Chatbot & Debug-Steuerzentrale", css=CUS
 
                     info_label(
                         "Frage eingeben (Alle Quartierssprachen)",
-                        "Gib deine Frage auf Deutsch, Arabisch, Türkisch, Ukrainisch, Russisch oder Englisch ein. Das System erkennt fremde Schriftsysteme (z. B. Arabisch) automatisch.",
+                        "Gib deine Frage auf Deutsch, Arabisch, Türkisch, Ukrainisch, Russisch oder Englisch ein.",
                     )
                     with gr.Row():
-                        user_input = gr.Textbox(
-                            show_label=False,
-                            placeholder="z.B. 'Wo gibt es Hilfe für Senior:innen?' oder auf Arabisch/Türkisch...",
-                            scale=4,
-                        )
+                        user_input = gr.Textbox(show_label=False, placeholder="z.B. 'Wo gibt es Hilfe für Senior:innen?'...", scale=4)
                         send_btn = gr.Button("Senden 🚀", variant="primary", scale=1)
 
                     with gr.Accordion("🎙️ Sprach-Ein-/Ausgabe (faster-whisper STT & Mehrsprachiges TTS)", open=True):
                         with gr.Row():
-                            mic_input = gr.Audio(
-                                sources=["microphone", "upload"],
-                                type="filepath",
-                                label="Mikrofon-Aufnahme (STT Port 8005)",
-                            )
-                            tts_output = gr.Audio(
-                                label="Sprachausgabe der Antwort (TTS Port 8005)",
-                                type="filepath",
-                                autoplay=True,
-                            )
+                            mic_input = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Mikrofon-Aufnahme (STT Port 8005)")
+                            tts_output = gr.Audio(label="Sprachausgabe der Antwort (TTS Port 8005)", type="filepath", autoplay=True)
                         with gr.Row():
                             with gr.Column():
-                                info_label(
-                                    "Automatische Sprachausgabe (SA-05)",
-                                    "Liest die Antwort in der gewählten Zielsprache (Deutsch, Arabisch, Türkisch, Ukrainisch, Russisch, Englisch) laut vor.",
-                                )
+                                info_label("Automatische Sprachausgabe (SA-05)", "Liest die Antwort laut vor.")
                                 enable_tts_chk = gr.Checkbox(value=True, label="Antwort automatisch vorlesen")
                             with gr.Column():
-                                info_label(
-                                    "Sprechgeschwindigkeit (SA-05)",
-                                    "0.85x spricht etwas langsamer und deutlicher (ideal für Senior:innen); 1.0x ist Normaltempo.",
-                                )
-                                tts_speed_slider = gr.Slider(
-                                    minimum=0.65, maximum=1.25, value=0.85, step=0.05, show_label=False
-                                )
+                                info_label("Sprechgeschwindigkeit (SA-05)", "0.85x ist ideal für Senior:innen; 1.0x Normaltempo.")
+                                tts_speed_slider = gr.Slider(minimum=0.65, maximum=1.25, value=0.85, step=0.05, show_label=False)
 
                     with gr.Row():
                         reset_btn = gr.Button("🗑️ Gespräch beenden & RAM löschen (DSGVO TA-06)", variant="stop")
@@ -515,227 +519,133 @@ with gr.Blocks(title="HOMIE - Quartiers-Chatbot & Debug-Steuerzentrale", css=CUS
                     gr.Markdown("### ⚙️ Architektur- & Sprach-Konfiguration")
                     with gr.Row():
                         with gr.Column():
-                            info_label(
-                                "KI-Paradigma (TA-04)",
-                                "• <b>agentic_ai:</b> Fragt bei unklaren Fragen nach (Slot-Filling), nutzt Filter-Tools und prüft Telefonnummern.<br>"
-                                "• <b>pure_rag:</b> Klassische Suche + direkte Antwort.<br>"
-                                "• <b>fine_tuned:</b> Nutzt ein auf den Quartiers-Tonfall trainiertes Modell.",
-                            )
-                            paradigm_radio = gr.Radio(
-                                choices=["agentic_ai", "pure_rag", "fine_tuned"],
-                                value="agentic_ai",
-                                show_label=False,
-                            )
+                            info_label("KI-Paradigma (TA-04)", "• <b>agentic_ai:</b> Fragt bei unklaren Fragen nach, nutzt Filter-Tools.<br>• <b>pure_rag:</b> Klassische Suche.<br>• <b>fine_tuned:</b> Tonalitäts-Modell.")
+                            paradigm_radio = gr.Radio(choices=["agentic_ai", "pure_rag", "fine_tuned"], value="agentic_ai", show_label=False)
                         with gr.Column():
-                            info_label(
-                                "Sprachniveau (SA-01)",
-                                "• <b>simple:</b> Bürgernahe, freundliche Alltagssprache.<br>"
-                                "• <b>easy:</b> Leichte Sprache mit sehr kurzen Sätzen und Mediopunkt (z. B. Pflege·beratung).<br>"
-                                "• <b>standard:</b> Normale Standardsprache.",
-                            )
-                            lang_level_radio = gr.Radio(
-                                choices=["simple", "easy", "standard"],
-                                value="simple",
-                                show_label=False,
-                            )
+                            info_label("Sprachniveau (SA-01)", "• <b>simple:</b> Alltagssprache.<br>• <b>easy:</b> Leichte Sprache mit Mediopunkt (·).<br>• <b>standard:</b> Standardsprache.")
+                            lang_level_radio = gr.Radio(choices=["simple", "easy", "standard"], value="simple", show_label=False)
 
                     with gr.Row():
                         with gr.Column():
-                            info_label(
-                                "Zielsprache (SA-02)",
-                                "Bestimmt die Sprache für Textantwort und Audio-Ausgabe: de=Deutsch, tr=Türkisch, ar=Arabisch, uk=Ukrainisch, ru=Russisch, en=Englisch.",
-                            )
-                            user_lang_drop = gr.Dropdown(
-                                choices=["de", "tr", "ar", "uk", "ru", "en"],
-                                value="de",
-                                show_label=False,
-                            )
+                            info_label("Zielsprache (SA-02)", "de, tr, ar, uk, ru, en")
+                            user_lang_drop = gr.Dropdown(choices=["de", "tr", "ar", "uk", "ru", "en"], value="de", show_label=False)
                         with gr.Column():
-                            info_label(
-                                "Übersetzungsverfahren",
-                                "• <b>v2a_direct:</b> Das LLM antwortet direkt in der Zielsprache (schneller).<br>"
-                                "• <b>v2b_translated:</b> Das LLM erzeugt erst einen deutschen Zwischentext (für HIX-Messung) und übersetzt ihn danach.",
-                            )
-                            trans_var_radio = gr.Radio(
-                                choices=["v2a_direct", "v2b_translated"],
-                                value="v2a_direct",
-                                show_label=False,
-                            )
+                            info_label("Übersetzungsverfahren", "• <b>v2a_direct:</b> Direkt in Zielsprache.<br>• <b>v2b_translated:</b> Erst DE-Zwischentext (HIX), dann Übersetzung.")
+                            trans_var_radio = gr.Radio(choices=["v2a_direct", "v2b_translated"], value="v2a_direct", show_label=False)
 
-                    info_label(
-                        "Quellen-Guard Schwellenwert (FA-06)",
-                        "Mindest-Score (0.0 bis 1.0) einer gefundenen Textstelle. Liegt der beste Treffer darunter, rät der Bot nicht, sondern verweist an die AWO-Beratung.",
-                    )
-                    threshold_slider = gr.Slider(
-                        minimum=0.05, maximum=0.85, value=0.25, step=0.05, show_label=False
-                    )
+                    info_label("Quellen-Guard Schwellenwert (FA-06)", "Mindest-Score. Liegt ein Treffer darunter, springt der AWO-Fallback an.")
+                    threshold_slider = gr.Slider(minimum=0.05, maximum=0.85, value=0.25, step=0.05, show_label=False)
 
-                    info_label(
-                        "Live Agent-Trace & Latenz-Aufschlüsselung",
-                        "Zeigt jeden ausgeführten Teilschritt (Query-Übersetzung, Retrieval, LLM, TTS) samt Dauer in Millisekunden.",
-                    )
+                    info_label("Live Agent-Trace & Latenz", "Zeigt jeden Teilschritt und dessen Dauer.")
                     trace_box = gr.Textbox(show_label=False, lines=6, interactive=False)
 
-                    info_label(
-                        "Deutscher Zwischentext (für HIX-Prüfung bei V2b)",
-                        "Zeigt bei aktivem 'v2b_translated' den deutschen Ursprungstext vor der Übersetzung in die Fremdsprache.",
-                    )
+                    info_label("Deutscher Zwischentext (V2b)", "Deutscher Ursprungstext vor der Übersetzung.")
                     german_inter_box = gr.Textbox(show_label=False, lines=3, interactive=False)
 
+                    info_label(
+                        "Abgerufene Quell-Chunks (Hybrid-Suche & Reranking)",
+                        "Zeigt die besten Textabschnitte (Chunks), die das System aus ChromaDB (Vektorsuche) und BM25 (Stichwortsuche) gefischt hat:<br><br>"
+                        "• <b>Dense-Rang:</b> Platzierung in der semantischen Vektorsuche.<br>"
+                        "• <b>BM25-Rang:</b> Platzierung in der Stichwortsuche.<br>"
+                        "• <b>RRF:</b> Mathematischer Wert der Rang-Zusammenführung (Reciprocal Rank Fusion).<br>"
+                        "• <b>Reranker:</b> Score des Cross-Encoders (tiefgehender Qualitätsvergleich von Frage und Chunk).<br>"
+                        "• <b>Final-Score:</b> Endgültiger Bewertungswert inkl. Boosts für offizielle Quellen und Leichte Sprache.",
+                    )
+
                     sources_table = gr.Dataframe(
-                        headers=[
-                            "Chunk-ID", "Titel", "Stadtteil", "Dense-Rang",
-                            "BM25-Rang", "RRF", "Reranker", "Final-Score", "Sprachen"
-                        ],
-                        label="📚 Abgerufene Quell-Chunks (ChromaDB + BM25 + Cross-Encoder)",
+                        headers=["Chunk-ID", "Titel", "Stadtteil", "Dense-Rang", "BM25-Rang", "RRF", "Reranker", "Final-Score", "Sprachen"],
+                        show_label=False,
                         interactive=False,
                     )
-                    qr_image_box = gr.Image(
-                        label="📱 QR-Code zum Mitnehmen aufs Smartphone (FA-07)",
-                        height=170,
-                    )
+                    qr_image_box = gr.Image(label="📱 QR-Code aufs Smartphone (FA-07)", height=170)
 
         # -------------------------------------------------------------
-        # TAB 2: QUALITY-GATE & ETL-PIPELINE (SA-03, § 1 - § 11)
+        # TAB 2: QUALITY-GATE, MASSEN-UPLOAD & INVENTAR-TABELLE
         # -------------------------------------------------------------
-        with gr.TabItem("🛡️ 2. Quality-Gate & ETL-Ingest (Regelwerk § 1–§ 11)"):
-            info_label(
-                "Automatische Übernahme in ChromaDB & BM25 (Delta-Sync)",
-                "Wenn aktiv, werden neu geprüfte Dokumente sofort in die Vektor- und Stichwortdatenbank des Chatbots übernommen (unveränderte Dokumente werden übersprungen).",
+        with gr.TabItem("🛡️ 2. Quality-Gate, Massen-Upload & Inventar"):
+            gr.Markdown("### 📂 Wissensbasis-Inventar (Was ist aktuell in der Datenbank?)")
+            inventory_table = gr.Dataframe(
+                headers=["Dokument-ID", "Titel", "Herausgeber", "Kategorie", "Stadtteil", "Chunks", "Gültig bis", "Status"],
+                value=load_knowledge_base_inventory(),
+                label="📊 Indexierte Dokumente in der ChromaDB / BM25 Wissensbasis",
+                interactive=False,
             )
-            auto_sync_chk = gr.Checkbox(
-                value=True,
-                label="Nach Prüfung automatisch in ChromaDB & BM25 synchronisieren",
-            )
+            refresh_inv_btn = gr.Button("🔄 Inventar-Tabelle aktualisieren", variant="secondary")
+
+            gr.Markdown("---")
+            gr.Markdown("### 📥 Dokumente & Webseiten hinzufügen (Einzel- oder Massen-Upload)")
+            
+            info_label("Automatische Synchronisation", "Wenn aktiv, werden hochgeladene Dateien sofort nach dem Quality-Gate für den Chatbot verfügbar gemacht.")
+            auto_sync_chk = gr.Checkbox(value=True, label="Nach Prüfung automatisch in ChromaDB & BM25 übernehmen")
+
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("#### 📄 A. PDF- oder Textdatei hochladen")
+                    gr.Markdown("#### 📄 A. Datei(en) hochladen (Massen-Upload fähig!)")
                     upload_file = gr.File(
-                        label="PDF- oder TXT-Dokument auswählen",
+                        label="PDF- oder TXT-Dateien auswählen (Du kannst hier einen ganzen Stapel Dateien auf einmal reinziehen!)",
                         file_types=[".pdf", ".txt", ".md"],
+                        file_count="multiple", # ERMÖGLICHT DEN MASSEN-UPLOAD!
                     )
-                    info_label(
-                        "Herausgeber & Ablaufdatum (Optional)",
-                        "Lasse beide Felder leer, damit das System den Herausgeber (z. B. Landkreis Hildesheim, AWO) und die Gültigkeit automatisch ermittelt.",
-                    )
-                    pub_input = gr.Textbox(
-                        value="",
-                        placeholder="Herausgeber (Optional – Leer lassen für Auto-Erkennung)",
-                        show_label=False,
-                    )
-                    valid_until_input = gr.Textbox(
-                        value="",
-                        placeholder="Ablaufdatum YYYY-MM-DD (Optional – Leer lassen für Auto-TTL)",
-                        show_label=False,
-                    )
-                    use_llm_chk = gr.Checkbox(
-                        value=False,
-                        label="Ollama-LLM zusätzlich für Metadaten nutzen (Dauert ~8s länger; Aus = Schneller Regex-Modus)",
-                    )
-                    ingest_file_btn = gr.Button("1. Datei prüfen (Quality-Gate) & Chunks erzeugen", variant="primary")
+                    pub_input = gr.Textbox(value="", placeholder="Herausgeber (Optional – Leer für Auto-Erkennung)", show_label=False)
+                    valid_until_input = gr.Textbox(value="", placeholder="Ablaufdatum YYYY-MM-DD (Optional – Leer für Auto-TTL)", show_label=False)
+                    use_llm_chk = gr.Checkbox(value=False, label="Ollama-LLM für Metadaten nutzen (Aus = Extrem schneller Regex-Modus)")
+                    ingest_file_btn = gr.Button("1. Datei(en) prüfen (Quality-Gate) & einlesen", variant="primary")
 
                 with gr.Column():
-                    gr.Markdown("#### 🌐 B. Webseite scrapen (Blacklist & Auto-Relevanz)")
-                    info_label(
-                        "Ziel-URL & Automatische Relevanzprüfung (§ 7 – § 9)",
-                        "Alle URLs außer den Einträgen auf der manuellen Blacklist sind erlaubt. Der Scraper prüft automatisch, ob der Seiteninhalt zum Quartier passt.",
-                    )
-                    scrape_url_input = gr.Textbox(
-                        placeholder="https://...",
-                        show_label=False,
-                    )
-                    scrape_pub_input = gr.Textbox(
-                        value="",
-                        placeholder="Herausgeber der Webseite (Optional – Leer lassen für Auto-Erkennung)",
-                        show_label=False,
-                    )
-                    scrape_valid_input = gr.Textbox(
-                        value="",
-                        placeholder="Ablaufdatum YYYY-MM-DD (Optional – Leer lassen für Auto-TTL)",
-                        show_label=False,
-                    )
-                    depth1_chk = gr.Checkbox(
-                        value=False,
-                        label="Kontextuelles Link-Crawling Tiefe = 1 (Aus = Nur Hauptseite scrapen, 3x schneller!)",
-                    )
+                    gr.Markdown("#### 🌐 B. Webseite scrapen")
+                    scrape_url_input = gr.Textbox(placeholder="https://...", show_label=False)
+                    scrape_pub_input = gr.Textbox(value="", placeholder="Herausgeber (Optional)", show_label=False)
+                    scrape_valid_input = gr.Textbox(value="", placeholder="Ablaufdatum YYYY-MM-DD (Optional)", show_label=False)
+                    depth1_chk = gr.Checkbox(value=False, label="Kontextuelles Link-Crawling Tiefe = 1")
                     scrape_btn = gr.Button("1. Webseite scrapen & im Quality-Gate prüfen", variant="secondary")
 
             etl_status_box = gr.Textbox(label="Status & Quality-Gate Entscheidung", lines=3, interactive=False)
-            sync_db_btn = gr.Button(
-                "2. 🔄 Alle freigegebenen Chunks manuell in ChromaDB & BM25 synchronisieren (Delta-Sync)",
-                variant="primary",
-            )
+            sync_db_btn = gr.Button("2. 🔄 Alle freigegebenen Chunks manuell synchronisieren (Delta-Sync)", variant="primary")
             sync_status_box = gr.Textbox(label="Datenbank-Synchronisations-Status", interactive=False)
 
             rules_df = gr.Dataframe(
                 headers=["Paragraph", "Regelname", "Status", "Messwert", "Auto-Fix?", "Begründung / Audit-Log"],
-                label="📋 Schrittweises Prüfprotokoll des Quality-Gate Microservice (§ 1 bis § 11)",
-                interactive=False,
+                label="📋 Prüfprotokoll des Quality-Gate Microservice (§ 1 bis § 11)", interactive=False,
             )
             with gr.Row():
                 meta_preview_box = gr.Code(label="Extrahierte & geprüfte Metadaten (JSON)", language="json")
-                chunks_preview_box = gr.Textbox(
-                    label="Erzeugte Semantische Chunks inkl. Header & DIN-Abkürzungen",
-                    lines=14,
-                )
+                chunks_preview_box = gr.Textbox(label="Erzeugte Semantische Chunks", lines=14)
 
         # -------------------------------------------------------------
-        # TAB 3: SYSTEM-HEALTH & MICROSERVICE-MONITOR
+        # TAB 3: SYSTEM-HEALTH
         # -------------------------------------------------------------
         with gr.TabItem("🩺 3. Microservice Health-Monitor"):
-            info_label(
-                "System-Status aller Microservices (Port 8001–8005 & Ollama 11434)",
-                "Prüft per HTTP-Health-Check, ob alle Hintergrunddienste aktiv sind und wie viele Chunks bzw. TTS-Stimmen geladen sind.",
-            )
+            info_label("System-Status", "Prüft per HTTP-Health-Check alle Hintergrunddienste.")
             health_btn = gr.Button("🔄 Status aller Services prüfen", variant="primary")
             health_output = gr.Textbox(show_label=False, lines=8, interactive=False)
 
     # Event-Bindings Tab 1
-    mic_input.change(
-        fn=transcribe_mic_input,
-        inputs=[mic_input],
-        outputs=[user_input, user_lang_drop, robot_status_box],
-    )
+    mic_input.change(fn=transcribe_mic_input, inputs=[mic_input], outputs=[user_input, user_lang_drop, robot_status_box])
     send_btn.click(
         fn=handle_chat_turn,
-        inputs=[
-            user_input, chatbot, session_id_box, paradigm_radio, lang_level_radio,
-            user_lang_drop, trans_var_radio, threshold_slider, enable_tts_chk, tts_speed_slider,
-        ],
-        outputs=[
-            chatbot, user_input, trace_box, german_inter_box,
-            sources_table, qr_image_box, tts_output, robot_status_box,
-        ],
+        inputs=[user_input, chatbot, session_id_box, paradigm_radio, lang_level_radio, user_lang_drop, trans_var_radio, threshold_slider, enable_tts_chk, tts_speed_slider],
+        outputs=[chatbot, user_input, trace_box, german_inter_box, sources_table, qr_image_box, tts_output, robot_status_box],
     )
     user_input.submit(
         fn=handle_chat_turn,
-        inputs=[
-            user_input, chatbot, session_id_box, paradigm_radio, lang_level_radio,
-            user_lang_drop, trans_var_radio, threshold_slider, enable_tts_chk, tts_speed_slider,
-        ],
-        outputs=[
-            chatbot, user_input, trace_box, german_inter_box,
-            sources_table, qr_image_box, tts_output, robot_status_box,
-        ],
+        inputs=[user_input, chatbot, session_id_box, paradigm_radio, lang_level_radio, user_lang_drop, trans_var_radio, threshold_slider, enable_tts_chk, tts_speed_slider],
+        outputs=[chatbot, user_input, trace_box, german_inter_box, sources_table, qr_image_box, tts_output, robot_status_box],
     )
-    reset_btn.click(
-        fn=reset_kiosk_session,
-        inputs=[session_id_box],
-        outputs=[chatbot, trace_box, robot_status_box],
-    )
+    reset_btn.click(fn=reset_kiosk_session, inputs=[session_id_box], outputs=[chatbot, trace_box, robot_status_box])
 
     # Event-Bindings Tab 2
     ingest_file_btn.click(
         fn=run_file_ingest_and_audit,
         inputs=[upload_file, pub_input, valid_until_input, use_llm_chk, auto_sync_chk],
-        outputs=[etl_status_box, rules_df, meta_preview_box, chunks_preview_box, sync_status_box],
+        outputs=[etl_status_box, rules_df, meta_preview_box, chunks_preview_box, sync_status_box, inventory_table],
     )
     scrape_btn.click(
         fn=run_url_scrape_and_audit,
         inputs=[scrape_url_input, scrape_pub_input, scrape_valid_input, depth1_chk, use_llm_chk, auto_sync_chk],
-        outputs=[etl_status_box, rules_df, meta_preview_box, chunks_preview_box, sync_status_box],
+        outputs=[etl_status_box, rules_df, meta_preview_box, chunks_preview_box, sync_status_box, inventory_table],
     )
-    sync_db_btn.click(fn=sync_etl_to_chromadb, inputs=[], outputs=[sync_status_box])
+    sync_db_btn.click(fn=sync_etl_to_chromadb, inputs=[], outputs=[sync_status_box, inventory_table])
+    refresh_inv_btn.click(fn=load_knowledge_base_inventory, inputs=[], outputs=[inventory_table])
 
     # Event-Bindings Tab 3
     health_btn.click(fn=check_all_microservices_health, inputs=[], outputs=[health_output])

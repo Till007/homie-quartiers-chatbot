@@ -45,6 +45,6 @@
     "sozial", "unterstützung", "antrag", "wohngeld", "bürgergeld", "nachbarschaft",
     "sprechstunde", "öffnungszeiten", "angebot", "stadtteil"
   ],
-  "min_relevance_hits": 2,
+  "min_relevance_hits": 1,
   "max_crawl_depth": 1
 }
