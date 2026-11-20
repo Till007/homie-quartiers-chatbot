@@ -376,7 +376,7 @@ class HybridRetrievalEngine:
 
         if best_score < req.score_threshold:
             logger.warning(
-                f"Quellen-Guard ausgelöst für Anfrage '{req.query}': "
+                f"Quellen-Guard ausgelöst (Anfrage mit {len(req.query)} Zeichen, Inhalt wird nicht protokolliert): "
                 f"Bester Score ({best_score:.3f}) < Schwellenwert ({req.score_threshold:.3f})."
             )
             return RetrievalResponse(

@@ -170,7 +170,8 @@ async def retrieve_endpoint(req: RetrievalRequest) -> RetrievalResponse:
     try:
         return engine.retrieve(req)
     except Exception as e:
-        logger.error(f"Fehler beim Retrieval für Query '{req.query}': {e}", exc_info=True)
+        # Kein Anfragetext im Log (K1, 2.3.9: Echtbetrieb nur mit Zeiten, Scores und Kennungen)
+        logger.error(f"Fehler beim Retrieval (Anfrage mit {len(req.query)} Zeichen): {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Retrieval-Fehler: {str(e)}")
 
 
