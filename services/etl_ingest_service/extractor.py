@@ -340,6 +340,11 @@ class DocumentExtractor:
                     sub_allowed, _ = self.is_url_allowed(sub_url)
                     if not sub_allowed:
                         continue
+                    # § 9 A gilt auch für Unterseiten (anderer Pfad oder andere Domain)
+                    sub_robots_ok, sub_robots_msg = await self.check_robots_txt(sub_url, client)
+                    if not sub_robots_ok:
+                        logger.info(f"Unterseite übersprungen: {sub_robots_msg}")
+                        continue
                     try:
                         sub_text, sub_title, _, _ = await self._fetch_and_clean_page(sub_url, client)
                         sub_rel, _ = self.evaluate_content_relevance(sub_text, sub_url)
